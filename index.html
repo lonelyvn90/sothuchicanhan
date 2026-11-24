@@ -885,7 +885,10 @@ function priceCell(e,kind,id,label,url,extra){
 const BB_BRANDS=[['kia','Kia'],['toyota','Toyota'],['hyundai','Hyundai'],['mazda','Mazda'],['honda','Honda'],['mitsubishi','Mitsubishi'],['ford','Ford'],['vinfast','VinFast'],['chevrolet','Chevrolet'],['nissan','Nissan'],['suzuki','Suzuki'],['mg','MG'],
   ['peugeot','Peugeot'],['volkswagen','Volkswagen'],['subaru','Subaru'],['mercedes_benz','Mercedes Benz'],['bmw','BMW'],['audi','Audi'],['lexus','Lexus'],['byd','BYD'],['isuzu','Isuzu'],['daewoo','Daewoo'],['mini','Mini'],['volvo','Volvo'],['jeep','Jeep'],['landrover','LandRover'],['jaguar','Jaguar'],['porsche','Porsche'],['bentley','Bentley'],['rolls_royce','Rolls Royce']];
 const BB_REGIONS=[['tp-hcm','TP HCM'],['ha-noi','Hà Nội'],['da-nang','Đà Nẵng'],['','Toàn quốc']];
-const bbOf=()=>Object.assign({region:'tp-hcm',year:2016,pmin:150,pmax:350,brands:['kia']},state.carSearch);
+const BB_DEFAULT=['kia','toyota','honda','hyundai','mazda','ford'];
+/* Bổ sung Toyota, Honda, Hyundai, Mazda, Ford cho bộ lọc đã lưu trước đây (chỉ một lần, đánh dấu bb2) */
+const bbOf=()=>{const s=Object.assign({region:'tp-hcm',year:2016,pmin:150,pmax:350,brands:BB_DEFAULT.slice()},JSON.parse(JSON.stringify(state.carSearch||{})));
+  if(!s.bb2){s.brands=[...new Set(s.brands.concat(BB_DEFAULT))];s.bb2=1}return s};
 const bbUrl=(s,b)=>`https://bonbanh.com/${s.region?s.region+'/':''}oto/${b}-so-tu-dong-tu-nam-${s.year}-may-xang-cu-da-qua-su-dung-gia-tu-${s.pmin}-${s.pmax}-trieu-sf200000020`;
 function bonbanhHtml(){
   const s=bbOf(),sel=BB_BRANDS.filter(([k])=>s.brands.includes(k)),rn=(BB_REGIONS.find(r=>r[0]===s.region)||[])[1];
@@ -902,16 +905,7 @@ function bonbanhHtml(){
       :'<div class="empty">Chưa chọn hãng nào. Bấm ⚙️ Bộ lọc để chọn.</div>'}
     <p class="hint">Bonbanh không cho app tự đọc tin đăng, nên mỗi nút mở thẳng danh sách tin trên Bonbanh với đúng bộ lọc trên.</p></div>`;
 }
-function carsHtml(){
-  const cars=carsOf();
-  return `${bonbanhHtml()}<details class="card cardet"><summary><h3 style="display:inline">📒 Sổ theo dõi giá xe (nhập tay)</h3></summary>
-    <p class="hint" style="margin:0 0 4px">Bấm <b>↗</b> để tra giá: xe <b>mới</b> mở bảng giá trên Google, xe <b>cũ</b> mở Bonbanh. Xem rồi nhập giá vào ô, app nhớ và so với lần trước.</p>
-    ${cars.map(c=>`<div class="frow"><div class="fhead"><span>🚗</span><b>${esc(c.name)}</b><button class="cardel" data-act="delCar" data-id="${c.id}" aria-label="Bỏ ${esc(c.name)}">✕</button></div>
-      <div class="fgrid">${priceCell(c.new||{},'new',c.id,'Mới','https://www.google.com/search?q='+encodeURIComponent('giá xe '+c.name+' mới nhất'))}
-      ${priceCell(c.used||{},'used',c.id,'Cũ'+(c.used&&c.used.yr?' · đời '+c.used.yr:''),'https://bonbanh.com/oto/'+carSlug(c.name),`<input class="yrIn" inputmode="numeric" data-caryr="${c.id}" value="${c.used&&c.used.yr||''}" placeholder="Đời xe (năm)" aria-label="Đời xe cũ">`)}</div></div>`).join('')}
-    <div class="caradd"><input id="carName" placeholder="Thêm mẫu xe, VD: Mazda CX-5" autocomplete="off"><button class="outline" data-act="addCar">＋ Thêm</button></div>
-    <p class="hint">▲ đỏ: tăng giá, ▼ xanh: giảm giá so với lần nhập trước. Giá xe mới nên ghi giá lăn bánh hoặc niêm yết, xe cũ ghi kèm đời xe để so cho đúng.</p></details>`;
-}
+function carsHtml(){return bonbanhHtml()}
 function saveCars(fn){const cars=JSON.parse(JSON.stringify(carsOf()));fn(cars);state.cars=cars;persist();render()}
 /* Dữ liệu cũ (một giá chung) được coi là giá Bách Hóa Xanh */
 function foodOf(k){const f=(state.food||{})[k]||{};if(f.p&&!f.bhx)return {bhx:{p:f.p,prev:f.prev,d:f.d}};return f}
