@@ -134,6 +134,16 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .ehead b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ehead small{color:var(--muted);font-size:12px;white-space:nowrap}
 .edel{color:var(--red);font-size:12px;border:1px solid var(--line);border-radius:8px;width:30px;height:30px;flex:none}
+/* Ô icon trong tab Tài khoản rộng bằng nhau để thanh số tiền thẳng hàng */
+.arow .aic{width:62px;height:38px;flex:none}.arow .aic .logo{width:38px;height:38px}
+.bbsum{font-size:13px;color:var(--muted);margin:2px 0 8px}
+.bbset{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg);margin-bottom:8px}
+.bbset .fl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-top:8px}.bbset .fl input,.bbset .fl select{margin-top:3px}
+.bbbrands{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.bbbrands .chip{padding:6px 10px;font-size:13px}
+.bbrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);color:inherit;text-decoration:none}
+.bbic{font-size:20px}.bbn{flex:1;min-width:0;display:flex;flex-direction:column}.bbn small{color:var(--muted);font-size:12px}
+.bbgo{color:var(--accent);font-weight:700;font-size:13.5px;border:1px solid var(--accent);border-radius:9px;padding:6px 10px;white-space:nowrap}
+.cardet summary{cursor:pointer;list-style:none}.cardet summary::-webkit-details-marker{display:none}.cardet summary::after{content:' ▸';color:var(--muted)}.cardet[open] summary::after{content:' ▾'}
 .acctool{margin:0 0 4px}.acctool button{color:var(--accent)}
 .pdform{border:1.5px solid var(--mc,var(--accent));border-radius:12px;padding:10px;margin:8px 0;background:var(--bg)}
 .pdform .seg button.on{background:var(--mc,var(--accent));color:#fff}
@@ -314,7 +324,7 @@ function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):nul
 /* Ghi nhận thay đổi để gộp dữ liệu giữa các máy:
    - giao dịch sửa: t.mt = lúc sửa; giao dịch xóa: state.deleted[id] = lúc xóa
    - tài khoản, khoản hằng tháng, mẫu ghi nhanh…: state.cfgAt = lúc sửa gần nhất */
-const CFG_KEYS=['setup','startDate','accounts','loans','recurring','quick','fuel','fuelDate','food','cars','pdebts','accSort','closed'];
+const CFG_KEYS=['setup','startDate','accounts','loans','recurring','quick','fuel','fuelDate','food','cars','carSearch','pdebts','accSort','closed'];
 const cfgOf=s=>JSON.stringify(CFG_KEYS.map(k=>s[k]===undefined?null:s[k]));
 const snap=s=>s&&s.tx?{cfg:cfgOf(s),tx:new Map(s.tx.map(t=>[t.id,JSON.stringify(t)]))}:null;
 let base=null;
@@ -863,15 +873,36 @@ function priceCell(e,kind,id,label,url,extra){
     <input class="money" inputmode="numeric" data-car="${id}" data-kind="${kind}" value="${e.p?fmtN(e.p):''}" placeholder="Giá (đồng)">${extra||''}
     <small class="muted">${e.p?'≈ '+fmtBig(e.p)+' · ':''}${e.d?dm(e.d):'&nbsp;'}${ch?` <span class="${ch>0?'out':'in'}">${ch>0?'▲':'▼'}${Math.abs(ch)}%</span>`:''}</small></div>`;
 }
+/* Bonbanh chặn đọc tin tự động, nên app ghép đúng địa chỉ bộ lọc để mở trang tin cho từng hãng */
+const BB_BRANDS=[['kia','Kia'],['toyota','Toyota'],['hyundai','Hyundai'],['mazda','Mazda'],['honda','Honda'],['mitsubishi','Mitsubishi'],['ford','Ford'],['vinfast','VinFast'],['chevrolet','Chevrolet'],['nissan','Nissan'],['suzuki','Suzuki'],['mg','MG'],
+  ['peugeot','Peugeot'],['volkswagen','Volkswagen'],['subaru','Subaru'],['mercedes_benz','Mercedes Benz'],['bmw','BMW'],['audi','Audi'],['lexus','Lexus'],['byd','BYD'],['isuzu','Isuzu'],['daewoo','Daewoo'],['mini','Mini'],['volvo','Volvo'],['jeep','Jeep'],['landrover','LandRover'],['jaguar','Jaguar'],['porsche','Porsche'],['bentley','Bentley'],['rolls_royce','Rolls Royce']];
+const BB_REGIONS=[['tp-hcm','TP HCM'],['ha-noi','Hà Nội'],['da-nang','Đà Nẵng'],['','Toàn quốc']];
+const bbOf=()=>Object.assign({region:'tp-hcm',year:2016,pmin:150,pmax:350,brands:['kia']},state.carSearch);
+const bbUrl=(s,b)=>`https://bonbanh.com/${s.region?s.region+'/':''}oto/${b}-so-tu-dong-tu-nam-${s.year}-may-xang-cu-da-qua-su-dung-gia-tu-${s.pmin}-${s.pmax}-trieu-sf200000020`;
+function bonbanhHtml(){
+  const s=bbOf(),sel=BB_BRANDS.filter(([k])=>s.brands.includes(k)),rn=(BB_REGIONS.find(r=>r[0]===s.region)||[])[1];
+  return `<div class="card bbcard"><div class="ch" style="align-items:center"><h3>🚗 Xe cũ trên Bonbanh</h3><button class="mini" data-act="bbEdit">${ui.bbEdit?'✓ Xong':'⚙️ Bộ lọc'}</button></div>
+    <div class="bbsum">${esc(rn||'Toàn quốc')} · Xe cũ · Số tự động · Máy xăng · Từ ${s.year} · ${s.pmin}–${s.pmax} triệu · 4–6 chỗ</div>
+    ${ui.bbEdit?`<div class="bbset">
+      <div class="grid2"><label class="fl">Khu vực<select data-bb="region">${BB_REGIONS.map(([k,n])=>`<option value="${k}" ${k===s.region?'selected':''}>${n}</option>`).join('')}</select></label>
+        <label class="fl">Từ năm<input data-bb="year" inputmode="numeric" value="${s.year}"></label></div>
+      <div class="grid2"><label class="fl">Giá từ (triệu)<input data-bb="pmin" inputmode="numeric" value="${s.pmin}"></label><label class="fl">Đến (triệu)<input data-bb="pmax" inputmode="numeric" value="${s.pmax}"></label></div>
+      <div class="fl">Hãng xe (chọn nhiều)</div>
+      <div class="bbbrands">${BB_BRANDS.map(([k,n])=>`<button class="chip ${s.brands.includes(k)?'on':''}" data-act="bbBrand" data-k="${k}">${esc(n)}</button>`).join('')}</div>
+      <p class="hint">Xe cũ, số tự động, máy xăng, 4–6 chỗ giữ như trang bạn gửi.</p></div>`:''}
+    ${sel.length?sel.map(([k,n])=>`<a class="bbrow" href="${bbUrl(s,k)}" target="_blank" rel="noopener"><span class="bbic">🚘</span><span class="bbn"><b>${esc(n)}</b><small>${esc(rn||'Toàn quốc')} · từ ${s.year} · ${s.pmin}–${s.pmax} triệu</small></span><span class="bbgo">Xem tin ↗</span></a>`).join('')
+      :'<div class="empty">Chưa chọn hãng nào. Bấm ⚙️ Bộ lọc để chọn.</div>'}
+    <p class="hint">Bonbanh không cho app tự đọc tin đăng, nên mỗi nút mở thẳng danh sách tin trên Bonbanh với đúng bộ lọc trên.</p></div>`;
+}
 function carsHtml(){
   const cars=carsOf();
-  return `<div class="card"><h3>🚗 Giá ô tô mới & cũ</h3>
+  return `${bonbanhHtml()}<details class="card cardet"><summary><h3 style="display:inline">📒 Sổ theo dõi giá xe (nhập tay)</h3></summary>
     <p class="hint" style="margin:0 0 4px">Bấm <b>↗</b> để tra giá: xe <b>mới</b> mở bảng giá trên Google, xe <b>cũ</b> mở Bonbanh. Xem rồi nhập giá vào ô, app nhớ và so với lần trước.</p>
     ${cars.map(c=>`<div class="frow"><div class="fhead"><span>🚗</span><b>${esc(c.name)}</b><button class="cardel" data-act="delCar" data-id="${c.id}" aria-label="Bỏ ${esc(c.name)}">✕</button></div>
       <div class="fgrid">${priceCell(c.new||{},'new',c.id,'Mới','https://www.google.com/search?q='+encodeURIComponent('giá xe '+c.name+' mới nhất'))}
       ${priceCell(c.used||{},'used',c.id,'Cũ'+(c.used&&c.used.yr?' · đời '+c.used.yr:''),'https://bonbanh.com/oto/'+carSlug(c.name),`<input class="yrIn" inputmode="numeric" data-caryr="${c.id}" value="${c.used&&c.used.yr||''}" placeholder="Đời xe (năm)" aria-label="Đời xe cũ">`)}</div></div>`).join('')}
     <div class="caradd"><input id="carName" placeholder="Thêm mẫu xe, VD: Mazda CX-5" autocomplete="off"><button class="outline" data-act="addCar">＋ Thêm</button></div>
-    <p class="hint">▲ đỏ: tăng giá, ▼ xanh: giảm giá so với lần nhập trước. Giá xe mới nên ghi giá lăn bánh hoặc niêm yết, xe cũ ghi kèm đời xe để so cho đúng.</p></div>`;
+    <p class="hint">▲ đỏ: tăng giá, ▼ xanh: giảm giá so với lần nhập trước. Giá xe mới nên ghi giá lăn bánh hoặc niêm yết, xe cũ ghi kèm đời xe để so cho đúng.</p></details>`;
 }
 function saveCars(fn){const cars=JSON.parse(JSON.stringify(carsOf()));fn(cars);state.cars=cars;persist();render()}
 /* Dữ liệu cũ (một giá chung) được coi là giá Bách Hóa Xanh */
@@ -1060,6 +1091,8 @@ const ACT={
   pdDel(el){const p=pdebtsOf().find(x=>x.id===el.dataset.id);if(!p||!confirm('Xóa khoản '+(p.dir==='lend'?'cho '+p.who+' vay':'vay '+p.who)+'? Các lần trả/thu ghi kèm cũng bị xóa.'))return;
     state.pdebts=pdebtsOf().filter(x=>x.id!==p.id);state.tx=state.tx.filter(t=>t.pid!==p.id);persist();render()},
   monNow(el,e){e.preventDefault();ui.month=today().slice(0,7);ui.fix=null;render()},
+  bbEdit(){ui.bbEdit=!ui.bbEdit;render()},
+  bbBrand(el){const s=bbOf(),k=el.dataset.k;s.brands=s.brands.includes(k)?s.brands.filter(x=>x!==k):s.brands.concat([k]);state.carSearch=s;persist();render()},
   addCar(){const n=$('#carName').value.trim();if(!n){toast('Nhập tên mẫu xe');return}
     saveCars(cs=>{if(!cs.some(c=>norm2(c.name)===norm2(n)))cs.push({id:carSlug(n)+'-'+uid().slice(0,4),name:n})});toast('Đã thêm '+n)},
   delCar(el){const c=carsOf().find(x=>x.id===el.dataset.id);if(!c||!confirm('Bỏ theo dõi giá xe "'+c.name+'"?'))return;saveCars(cs=>{const i=cs.findIndex(x=>x.id===c.id);if(i>=0)cs.splice(i,1)})},
@@ -1164,6 +1197,9 @@ document.addEventListener('change',e=>{
   if(el.id==='toSel'){ui.toAcc=el.value;return}
   if(el.dataset.st){const a=accById(el.dataset.st);if(!a)return;const mk=today().slice(0,7),v=parseAmt(el.value);a.stmt=Object.assign({},a.stmt);
     if(v)a.stmt[mk]=v;else delete a.stmt[mk];persist();render();toast(v?'Đã lưu số phải thanh toán tháng này':'Đã xóa số sao kê');return}
+  if(el.dataset.bb){const s=bbOf(),k=el.dataset.bb,cy=new Date().getFullYear();let v=el.value;
+    if(k!=='region'){v=parseInt(v)||0;if(k==='year')v=Math.min(cy,Math.max(1990,v||2016));else v=Math.max(0,v)}
+    s[k]=v;if(s.pmin>s.pmax&&s.pmax)[s.pmin,s.pmax]=[s.pmax,s.pmin];state.carSearch=s;persist();render();return}
   if(el.dataset.pd){if(ui.pdForm)ui.pdForm[el.dataset.pd]=el.value;return}
   if(el.dataset.car){const id=el.dataset.car,kind=el.dataset.kind,v=parseAmt(el.value);
     saveCars(cs=>{const c=cs.find(x=>x.id===id);if(!c)return;const o=c[kind]||{};c[kind]=v?Object.assign({},o,{p:v,prev:o.p&&o.p!==v?o.p:o.prev||0,d:today()}):(o.yr?{yr:o.yr}:undefined)});toast(v?'Đã lưu giá xe':'Đã xóa giá');return}
