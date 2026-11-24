@@ -896,11 +896,13 @@ function priceCell(e,kind,id,label,url,extra){
 /* Bonbanh chặn đọc tin tự động, nên app ghép đúng địa chỉ bộ lọc để mở trang tin cho từng hãng */
 const BB_BRANDS=[['kia','Kia'],['toyota','Toyota'],['hyundai','Hyundai'],['mazda','Mazda'],['honda','Honda'],['mitsubishi','Mitsubishi'],['ford','Ford'],['vinfast','VinFast'],['chevrolet','Chevrolet'],['nissan','Nissan'],['suzuki','Suzuki'],['mg','MG'],
   ['peugeot','Peugeot'],['volkswagen','Volkswagen'],['subaru','Subaru'],['mercedes_benz','Mercedes Benz'],['bmw','BMW'],['audi','Audi'],['lexus','Lexus'],['byd','BYD'],['isuzu','Isuzu'],['daewoo','Daewoo'],['mini','Mini'],['volvo','Volvo'],['jeep','Jeep'],['landrover','LandRover'],['jaguar','Jaguar'],['porsche','Porsche'],['bentley','Bentley'],['rolls_royce','Rolls Royce']];
-const BB_REGIONS=[['tp-hcm','TP HCM'],['ha-noi','Hà Nội'],['da-nang','Đà Nẵng'],['','Toàn quốc']];
+const BB_REGIONS=[['ba-ria-vung-tau','Bà Rịa Vũng Tàu'],['tp-hcm','TP HCM'],['ha-noi','Hà Nội'],['da-nang','Đà Nẵng'],['','Toàn quốc']];
 const BB_DEFAULT=['kia','toyota','honda','hyundai','mazda','ford'];
 /* Bổ sung Toyota, Honda, Hyundai, Mazda, Ford cho bộ lọc đã lưu trước đây (chỉ một lần, đánh dấu bb2) */
-const bbOf=()=>{const s=Object.assign({region:'tp-hcm',year:2016,pmin:150,pmax:350,brands:BB_DEFAULT.slice()},JSON.parse(JSON.stringify(state.carSearch||{})));
-  if(!s.bb2){s.brands=[...new Set(s.brands.concat(BB_DEFAULT))];s.bb2=1}return s};
+const bbOf=()=>{const s=Object.assign({region:'ba-ria-vung-tau',year:2016,pmin:150,pmax:350,brands:BB_DEFAULT.slice()},JSON.parse(JSON.stringify(state.carSearch||{})));
+  if(!s.bb2){s.brands=[...new Set(s.brands.concat(BB_DEFAULT))];s.bb2=1}
+  /* Chuyển khu vực mặc định sang Bà Rịa Vũng Tàu (một lần, đánh dấu bb3) */
+  if(!s.bb3){s.region='ba-ria-vung-tau';s.bb3=1}return s};
 const bbUrl=(s,b)=>`https://bonbanh.com/${s.region?s.region+'/':''}oto/${b}-so-tu-dong-tu-nam-${s.year}-may-xang-cu-da-qua-su-dung-gia-tu-${s.pmin}-${s.pmax}-trieu-sf200000020`;
 function bonbanhHtml(){
   const s=bbOf(),sel=BB_BRANDS.filter(([k])=>s.brands.includes(k)),rn=(BB_REGIONS.find(r=>r[0]===s.region)||[])[1];
@@ -1173,7 +1175,8 @@ const ACT={
   },
   edit(el){const t=state.tx.find(x=>x.id===el.dataset.id);if(!t)return;ui.editing=t.id;ui.type=t.type;ui.cat=t.cat;ui.acc=t.acc;if(t.toAcc)ui.toAcc=t.toAcc;$('#amt').value=fmtN(t.amount);$('#note').value=t.note||'';render();scrollTo({top:0,behavior:'smooth'})},
   cancelEdit(){ui.editing=null;clearForm();render()},
-  del(el){if(!confirm('Xóa giao dịch này?'))return;const id=el.dataset.id;state.tx=state.tx.filter(t=>t.id!==id);if(ui.editing===id){ui.editing=null;clearForm()}persist();render();toast('Đã xóa')},
+  del(el){const id=el.dataset.id,tx=state.tx.find(t=>t.id===id);if(!tx)return;
+    if(!confirm('Xóa giao dịch "'+(tx.note||tx.cat||'Chuyển tiền')+'" '+fmt(tx.amount)+' ngày '+dmy(tx.date)+'?'))return;state.tx=state.tx.filter(t=>t.id!==id);if(ui.editing===id){ui.editing=null;clearForm()}persist();render();toast('Đã xóa')},
   payDue(el){const it=ui.dueMap[el.dataset.key];if(!it)return;const inp=document.querySelector(`[data-due="${it.key}"]`),amount=parseAmt(inp&&inp.value);if(!amount){toast('Nhập số tiền');return}
     const t={id:uid(),ts:Date.now(),date:ui.date,type:it.type,amount,cat:it.cat,acc:it.acc,note:it.name,ref:it.key};if(it.toAcc)t.toAcc=it.toAcc;usdTag(t,it);state.tx.push(t);persist();render();toast('Đã ghi: '+it.name)},
   recon(){ui.recon=!ui.recon;render()},
@@ -1214,8 +1217,10 @@ const ACT={
     const val=s==='accounts'?(a=>+a.opening||0):(r=>(r.cur==='USD'?recAmount(r):+r.amount)||0),cmp=(a,b)=>dir==='desc'?val(b)-val(a):val(a)-val(b);
     if(s==='recurring'){const idx=arr.map((r,i)=>i).filter(i=>arr[i].type===t),items=idx.map(i=>arr[i]).sort(cmp);idx.forEach((i,n)=>arr[i]=items[n])}else arr.sort(cmp);
     render();toast(dir==='desc'?'Đã xếp số tiền lớn → nhỏ':'Đã xếp số tiền nhỏ → lớn')},
-  delRow(el){const s=el.dataset.sec,i=+el.dataset.i,row=ui.draft[s][i];
-    if(s==='accounts'&&state&&state.tx&&state.tx.some(t=>t.acc===row.id||t.toAcc===row.id)&&!confirm('Tài khoản này đã có giao dịch. Vẫn xóa?'))return;
+  delRow(el){const s=el.dataset.sec,i=+el.dataset.i,row=ui.draft[s][i];if(!row)return;
+    const kind=s==='accounts'?'tài khoản':s==='loans'?'khoản trả góp':row.type==='income'?'khoản thu hằng tháng':'khoản chi hằng tháng',nm=row.name?' "'+row.name+'"':'';
+    const used=s==='accounts'&&state&&state.tx&&state.tx.some(t=>t.acc===row.id||t.toAcc===row.id);
+    if(!confirm('Xóa '+kind+nm+'?'+(used?'\nTài khoản này đã có giao dịch, các giao dịch cũ sẽ hiện "(đã xóa)".':'')+'\nThay đổi chỉ áp dụng khi bạn bấm Lưu.'))return;
     ui.draft[s].splice(i,1);render()},
   export(){const b=new Blob([JSON.stringify(Object.assign({},state,{theme}))],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='so-thu-chi-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
     try{localStorage.setItem('sothuchi_lastbackup',today())}catch(e){}render();toast('Đã tạo file sao lưu')},
