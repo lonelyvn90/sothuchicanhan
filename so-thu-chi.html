@@ -210,7 +210,7 @@ const SQUARE=new Set('SPAYLATER,SHOPEEPAY,VNPAY,APPOTA,GALAXYPAY,VTCPAY,BAOKIM,N
 const badge=b=>`<span class="logo" style="background:${b.col};font-size:${b.s.length<=3?12:b.s.length<=4?10.5:9}px" title="${esc(b.n)}">${esc(b.s)}</span>`;
 function logoFail(img){const b=BRAND[img.dataset.c];img.parentNode.classList.remove('hasimg');img.outerHTML=b?badge(b):'🏦'}
 function accIcon(a){const b=(a.brand&&BRAND[a.brand])||guessBrand(a.name);
-  if(b&&LOGOS[b.c])return `<img class="lg${SQUARE.has(b.c)?' sq':''}" src="logos/${LOGOS[b.c]}" alt="${esc(b.n)}" title="${esc(b.n)}" data-c="${b.c}" onerror="logoFail(this)">`;
+  if(b&&LOGOS[b.c])return `<img class="lg${SQUARE.has(b.c)?' sq':''}" src="${(window.LOGO_DATA||{})[b.c]||'logos/'+LOGOS[b.c]}" alt="${esc(b.n)}" title="${esc(b.n)}" data-c="${b.c}" onerror="logoFail(this)">`;
   return b?`<span class="logo" style="background:${b.col};font-size:${b.s.length<=3?12:b.s.length<=4?10.5:9}px" title="${esc(b.n)}">${esc(b.s)}</span>`:(ACC_ICON[a.type]||'🏦')}
 const ACC_TYPES={bank:'Ngân hàng',wallet:'Ví điện tử',cash:'Tiền mặt',credit:'Thẻ tín dụng',paylater:'Mua trước trả sau'};
 const WD=['Chủ nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
