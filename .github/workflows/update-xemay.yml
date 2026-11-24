@@ -28,8 +28,8 @@ jobs:
         run: |
           # Chỉ commit khi danh sách xe/giá đổi (bỏ qua ngày cập nhật)
           if git diff --quiet -- xemay.json; then echo "Không có thay đổi"; exit 0; fi
-          old=$(git show HEAD:xemay.json | sed -E 's/"updated":"[^"]*",//')
-          new=$(sed -E 's/"updated":"[^"]*",//' xemay.json)
+          old=$(git show HEAD:xemay.json | jq -S -c 'del(.updated)')
+          new=$(jq -S -c 'del(.updated)' xemay.json)
           if [ "$old" = "$new" ]; then echo "Giá không đổi, chỉ khác ngày - bỏ qua"; git checkout -- xemay.json; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
