@@ -88,6 +88,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .wd.today{border-color:var(--accent);color:var(--accent)}
 .wd.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}.wd.on small{color:inherit;opacity:.85}.wd.on i.dot{background:var(--on-accent)}
 .wd:disabled{opacity:.35}
+.dbox{margin-top:7px;background:var(--bg);border-radius:10px;padding:7px 9px;font-size:12.5px}
+.dline{margin:2px 0}.dline.ok{color:var(--green)}.dline.late{color:var(--red);font-weight:600}
+.drow{display:flex;gap:6px;flex-wrap:wrap}.drow .mini{margin-top:5px}
 .steps{margin:8px 0;padding-left:20px;font-size:14px}.steps li{margin:4px 0}
 button:disabled{opacity:.55}
 .mini{margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:12px;font-weight:600;color:var(--accent);background:var(--card)}
@@ -377,6 +380,12 @@ let state=load();
 if(state&&state.tx){const fixCat=o=>{if(o.cat==='Hóa đơn')o.cat='Điện nước'};state.tx.forEach(fixCat);(state.recurring||[]).forEach(fixCat)}
 base=snap(state);
 let ui={view:state&&state.setup?'today':'setup',date:today(),type:'expense',cat:EXP_CATS[0],acc:null,toAcc:null,editing:null,recon:false,month:today().slice(0,7),draft:null,amtVal:'',noteVal:'',sugs:[],dueMap:{}};
+/* Giữ tab và vị trí cuộn khi tải lại trang (vuốt xuống để làm mới). Mở app mới hoàn toàn thì về Ghi sổ. */
+const VKEY='sothuchi_view';
+try{const v=JSON.parse(sessionStorage.getItem(VKEY)||'null');
+  if(v&&state&&state.setup&&['today','month','forecast','market','accounts','settings'].includes(v.view)){ui.view=v.view;if(v.month)ui.month=v.month;if(v.fh)ui.fh=v.fh;if(v.date&&v.date<=today())ui.date=v.date;ui.restoreY=v.y||0}}catch(e){}
+function saveView(){try{if(ui.view!=='setup')sessionStorage.setItem(VKEY,JSON.stringify({view:ui.view,month:ui.month,fh:ui.fh,date:ui.date,y:Math.round(scrollY)}))}catch(e){}}
+let viewT;addEventListener('scroll',()=>{clearTimeout(viewT);viewT=setTimeout(saveView,200)},{passive:true});
 
 const accById=id=>state.accounts.find(a=>a.id===id);
 const accName=id=>{const a=accById(id);return a?a.name:'(đã xóa)'};
@@ -543,11 +552,21 @@ function interestIn(pre){
 }
 function viewAccounts(){
   const money=state.accounts.filter(a=>!isDebt(a)).map(a=>({a,v:bal(a.id)}));
-  const debts=state.accounts.filter(a=>isDebt(a)).map(a=>{const v=Math.max(0,-bal(a.id)),paid=interestIn('').by[a.name]||0;return {ic:accIcon(a),name:a.name,lim:a.limit||0,v,
-      sub:[ACC_TYPES[a.type],a.limit?`còn hạn mức <b class="${a.limit-v<a.limit*0.2?'late':''}">${fmtK(a.limit-v)}</b>/${fmtK(a.limit)}`:'',a.dueDay?'hạn trả ngày '+a.dueDay:'',
-        a.rate?`lãi ${String(a.rate).replace('.',',')}%/tháng${v?` <span class="late">(≈${fmtK(v*a.rate/100)}/tháng nếu không trả hết)</span>`:''}`:'',paid?`đã trả lãi ${fmtK(paid)}`:''].filter(Boolean).join(' · '),
-      extra:`<button class="mini" data-act="addInterest" data-id="${a.id}">＋ Ghi lãi/phí</button>`}})
-    .concat(state.loans.map(l=>{const n=loanLeft(l);return {ic:loanIcon(l.name),name:l.name,sub:`Trả góp · còn ${n} kỳ × ${fmtK(l.amount)}${l.interest?` · lãi ${fmtK(l.interest)}/kỳ, còn phải trả lãi ${fmtK(l.interest*n)}`:''}`,v:n*l.amount}}));
+  const T=today(),mk=T.slice(0,7),dueNow=dueItems(mk),dueOf=k=>dueNow.find(i=>i.key===k),monthInt=interestIn(mk).by,allInt=interestIn('').by;
+  const dueLine=it=>it.done?`<div class="dline ok">✓ Đã trả ${fmt(it.done.amount)} ngày ${dm(it.done.date)}</div>`
+    :`<div class="dline ${it.date<T?'late':''}">📅 Tháng này phải trả <b>${fmt(it.amount)}</b> · ${it.date<T?'quá hạn từ':'hạn'} ${dm(it.date)}</div>`;
+  let dueSum=0;
+  const debts=state.accounts.filter(a=>isDebt(a)).map(a=>{const v=Math.max(0,-bal(a.id)),it=dueOf('c:'+a.id),mi=monthInt[a.name]||0,ai=allInt[a.name]||0;
+      if(it&&!it.done)dueSum+=it.amount;
+      return {ic:accIcon(a),name:a.name,lim:a.limit||0,v,
+      sub:[ACC_TYPES[a.type],a.limit?`còn hạn mức <b class="${a.limit-v<a.limit*0.2?'late':''}">${fmtK(a.limit-v)}</b>/${fmtK(a.limit)}`:'',a.rate?`lãi ${String(a.rate).replace('.',',')}%/tháng`:''].filter(Boolean).join(' · '),
+      extra:`<div class="dbox">${it?dueLine(it)+(it.done&&v&&a.dueDay?`<div class="dline">📅 Kỳ sau phải trả <b>${fmt(v)}</b> · hạn ${String(a.dueDay).padStart(2,'0')}/${addMonths(mk,1).slice(5)}</div>`:''):v?`<div class="dline">${a.dueDay?'':'Chưa đặt ngày đến hạn trả · '}Dư nợ ${fmt(v)}</div>`:'<div class="dline ok">✓ Không còn dư nợ</div>'}
+        <div class="dline">💸 Lãi/phí tháng này: <b class="${mi?'out':''}">${fmt(mi)}</b>${ai>mi?` · tổng đã trả ${fmtK(ai)}`:''}</div>
+        ${a.rate&&v&&!(it&&it.done)?`<div class="dline muted">Nếu không trả hết, lãi tháng sau ≈ <b class="late">${fmt(Math.round(v*a.rate/100))}</b></div>`:''}
+        <div class="drow">${v?`<button class="mini" data-act="payDebt" data-key="c:${a.id}">Thanh toán</button>`:''}<button class="mini" data-act="addInterest" data-id="${a.id}">＋ Ghi lãi/phí</button></div></div>`}})
+    .concat(state.loans.map(l=>{const n=loanLeft(l),it=dueOf('l:'+l.id);if(it&&!it.done)dueSum+=it.amount;
+      return {ic:loanIcon(l.name),name:l.name,v:n*l.amount,sub:`Trả góp · còn ${n} kỳ × ${fmtK(l.amount)}${l.interest?` · còn phải trả lãi ${fmtK(l.interest*n)}`:''}`,
+      extra:it?`<div class="dbox">${dueLine(it)}${l.interest?`<div class="dline">💸 Lãi trong kỳ này: <b>${fmt(l.interest)}</b></div>`:''}${!it.done?`<div class="drow"><button class="mini" data-act="payDebt" data-key="l:${l.id}">Trả kỳ này</button></div>`:''}</div>`:''}}));
   const have=money.reduce((s,x)=>s+Math.max(0,x.v),0),owe=debts.reduce((s,x)=>s+x.v,0);
   const mh=Math.max(0,...money.map(x=>x.v)),md=Math.max(0,...debts.map(x=>x.v));
   return `<div class="ch" style="align-items:center"><h1>Tài khoản</h1><button class="gear" data-act="tab" data-view="settings" aria-label="Cài đặt">⚙️ Cài đặt</button></div>
@@ -556,7 +575,7 @@ function viewAccounts(){
       <div><span><i style="background:var(--red)"></i>Còn nợ</span><b>${fmt(owe)}</b></div>
       ${have?`<small class="muted">Nợ bằng ${Math.round(owe/have*100)}% số tiền đang có</small>`:''}</div></div></div>
   <div class="card"><div class="ch"><h3>💰 Đang có</h3><b class="in">${fmt(have)}</b></div>${money.map(x=>arow(accIcon(x.a),x.a.name,ACC_TYPES[x.a.type],x.v,mh,false)).join('')}</div>
-  ${debts.length?`<div class="card"><div class="ch"><h3>📉 Còn nợ</h3><b class="out">${fmt(owe)}</b></div>${debts.map(x=>arow(x.ic,x.name,x.sub,x.v,x.lim||md,true,x.extra)).join('')}</div>`:''}
+  ${debts.length?`<div class="card"><div class="ch"><h3>📉 Còn nợ</h3><b class="out">${fmt(owe)}</b></div>${dueSum?`<p class="hint" style="margin:-4px 0 4px">Tháng này còn phải trả <b class="out">${fmt(dueSum)}</b></p>`:''}${debts.map(x=>arow(x.ic,x.name,x.sub,x.v,x.lim||md,true,x.extra)).join('')}</div>`:''}
   <button class="primary" data-act="editSetup">Sửa tài khoản & khoản hằng tháng</button>
   <button class="outline" style="width:100%;margin-top:8px" data-act="tab" data-view="settings">⚙️ Cài đặt: giao diện, sao lưu, khôi phục</button>`;
 }
@@ -805,6 +824,7 @@ function render(){
   const tv=ui.view==='settings'?'accounts':ui.view;
   tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.view===tv));
   const a=$('#amt');if(a){a.value=ui.amtVal||'';$('#note').value=ui.noteVal||''}
+  saveView();
 }
 function clearForm(){const a=$('#amt');if(a){a.value='';$('#note').value=''}ui.amtVal='';ui.noteVal=''}
 const ACT={
@@ -815,6 +835,13 @@ const ACT={
   cat(el){ui.cat=el.dataset.v;ui.more=false;render()},
   more(){ui.more=!ui.more;render()},
   mktReload(){loadMarket(true)},
+  payDebt(el){const key=el.dataset.key,T=today(),it=dueItems(T.slice(0,7)).find(i=>i.key===key&&!i.done);
+    let acc,toAcc,name,amount,type='transfer',cat=null;
+    if(it){acc=it.acc;toAcc=it.toAcc;name=it.name;amount=it.amount;type=it.type;cat=it.cat}
+    else{const a=accById(key.slice(2));if(!a)return;acc=a.payFrom;toAcc=a.id;name='Trả '+a.name;amount=Math.max(0,-bal(a.id))}
+    const v=prompt(name+' — số tiền thanh toán (từ '+accName(acc)+'):',fmtN(amount));if(v===null)return;const amt=parseAmt(v);if(!amt){toast('Số tiền không hợp lệ');return}
+    const t={id:uid(),ts:Date.now(),date:T,type,amount:amt,cat,acc,note:name};if(type==='transfer')t.toAcc=toAcc;if(it)t.ref=it.key;
+    state.tx.push(t);persist();render();toast('Đã ghi: '+name+' '+fmt(amt))},
   addInterest(el){const a=accById(el.dataset.id);if(!a)return;const est=Math.round(Math.max(0,-bal(a.id))*(a.rate||0)/100/1000)*1000;
     ui.view='today';ui.date=today();ui.type='expense';ui.cat='Lãi & phí';ui.more=false;ui.acc=a.id;ui.editing=null;ui.amtVal=est?fmtN(est):'';ui.noteVal='Lãi/phí '+a.name;
     render();scrollTo(0,0);const i=$('#amt');i.focus();i.select();toast(est?'Đã điền lãi ước tính, sửa theo sao kê rồi bấm Thêm':'Nhập tiền lãi/phí theo sao kê rồi bấm Thêm')},
@@ -921,6 +948,7 @@ if('serviceWorker' in navigator&&location.protocol!=='file:')addEventListener('l
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='amt'||e.target.id==='note')){e.preventDefault();ACT.save()}});
 render();
+if(ui.restoreY){const y=ui.restoreY;ui.restoreY=0;requestAnimationFrame(()=>scrollTo(0,y))}
 /* Đồng bộ khi mở app, khi quay lại app và khi có mạng trở lại */
 if(sync)scheduleSync(300);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleSync(300)});
