@@ -133,7 +133,15 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .enum{width:24px;height:24px;border-radius:50%;background:var(--sc);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
 .ehead b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ehead small{color:var(--muted);font-size:12px;white-space:nowrap}
-.edel{color:var(--red);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;flex:none}
+.edel{color:var(--red);font-size:12px;border:1px solid var(--line);border-radius:8px;width:30px;height:30px;flex:none}
+.plan{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:5px 8px;flex:none;white-space:nowrap}
+.card.fut{border-style:dashed}
+.ehead{cursor:pointer}.ett{flex:1;min-width:0;display:flex;flex-direction:column}.ett b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ett small{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emove{display:flex;gap:4px;flex:none}.emove button{width:30px;height:30px;border:1px solid var(--line);border-radius:8px;font-size:11px;color:var(--muted)}
+.echev{width:16px;text-align:center;color:var(--muted);flex:none}
+.ecard.closed{padding:9px 12px}.ecard.closed .ehead{border-bottom:0;padding-bottom:0;margin-bottom:0}
+.shead{cursor:pointer}
+.stool{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.stool button{border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12.5px;background:var(--card);color:var(--sc);font-weight:600}
 .ecard .fl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-top:9px}
 .ecard .fl input,.ecard .fl select{margin-top:3px}
 .ecard .brandrow{margin:3px 0 0}
@@ -438,6 +446,8 @@ if(state&&state.tx){const fixCat=o=>{if(o.cat==='Hóa đơn')o.cat='Điện nư�
 base=snap(state);
 let ui={view:state&&state.setup?'today':'setup',date:today(),type:'expense',cat:EXP_CATS[0],acc:null,toAcc:null,editing:null,recon:false,month:today().slice(0,7),draft:null,amtVal:'',noteVal:'',sugs:[],dueMap:{}};
 /* Giữ tab và vị trí cuộn khi tải lại trang (vuốt xuống để làm mới). Mở app mới hoàn toàn thì về Ghi sổ. */
+ui.open=new Set();ui.closedSec=new Set();ui.sortDir={};
+const secItems=id=>{const d=ui.draft;if(!d)return [];return id==='s-acc'?d.accounts:id==='s-loan'?d.loans:d.recurring.filter(r=>r.type===(id==='s-inc'?'income':'expense'))};
 const VKEY='sothuchi_view';
 try{const v=JSON.parse(sessionStorage.getItem(VKEY)||'null');
   if(v&&state&&state.setup&&['today','month','forecast','market','accounts','settings'].includes(v.view)){ui.view=v.view;if(v.month)ui.month=v.month;if(v.fh)ui.fh=v.fh;if(v.date&&v.date<=today())ui.date=v.date;ui.restoreY=v.y||0}}catch(e){}
@@ -467,7 +477,11 @@ function dueItems(mk){
   const paid=key=>state.tx.find(t=>t.ref===key&&t.date.startsWith(mk));
   const out=[];
   for(const r of state.recurring)out.push({key:'r:'+r.id,name:r.name,amount:recAmount(r),date:at(r.day),acc:r.acc,type:r.type,cat:r.cat,usd:isUsd(r)?r.usd:0,usdNote:isUsd(r)?usdNote(r):''});
-  for(const l of state.loans){const key='l:'+l.id;if(loanLeft(l)>0||paid(key))out.push({key,name:'Trả góp '+l.name,amount:l.amount,date:at(l.day),acc:l.acc,type:'expense',cat:'Trả góp'})}
+  const cm=today().slice(0,7),ahead=(()=>{const [a,b]=cm.split('-').map(Number),[c,e]=mk.split('-').map(Number);return (c-a)*12+(e-b)})();
+  for(const l of state.loans){const key='l:'+l.id;
+    /* Tháng sau: chỉ hiện nếu còn đủ kỳ tới tháng đó */
+    if(ahead>0){const paidCur=state.tx.some(t=>t.ref===key&&t.date.startsWith(cm));if(ahead+(paidCur?0:1)>loanLeft(l))continue}
+    if(loanLeft(l)>0||paid(key))out.push({key,name:'Trả góp '+l.name,amount:l.amount,date:at(l.day),acc:l.acc,type:'expense',cat:'Trả góp'})}
   /* Thẻ tín dụng / trả sau: nếu đã nhập số phải trả theo sao kê tháng này thì dùng số đó (trả thiếu vẫn còn nợ phần còn lại),
      chưa nhập thì dùng toàn bộ dư nợ hiện tại */
   for(const a of state.accounts.filter(a=>isDebt(a)&&a.dueDay)){
@@ -559,7 +573,7 @@ function viewToday(){
 function fixRow(i){
   const T=today(),r=i.key.startsWith('r:');
   const ic=i.type==='transfer'?'💳':(ICON[i.cat]||'📦');
-  const st=i.done?`<button class="okb" data-act="undoFix" data-key="${i.key}" title="Bỏ đánh dấu">✓ ${dm(i.done.date)}</button>`
+  const st=i.date.slice(0,7)>T.slice(0,7)?`<span class="plan">Dự kiến</span>`:i.done?`<button class="okb" data-act="undoFix" data-key="${i.key}" title="Bỏ đánh dấu">✓ ${dm(i.done.date)}</button>`
     :`<button class="pay" data-act="payFix" data-key="${i.key}">${i.type==='income'?'Nhận':'Trả'}</button>`;
   return `<div class="fx ${i.done?'done':''}"><div class="ic">${ic}</div><div class="bd" ${r?`data-act="editFix" data-id="${i.key.slice(2)}"`:''}><b>${esc(i.name)}</b><small>Ngày ${+i.date.slice(8)} · ${esc(accName(i.acc))}${!i.done&&i.date<T?' · <span class="late">trễ hạn</span>':''}${i.usd&&!i.done?`<br>💵 ${i.usdNote}`:i.usd&&i.done&&i.done.usd?`<br>💵 ${fmtUsd(i.done.usd)} · ${fmtN(i.done.rate)}đ/USD`:''}</small></div><div class="am ${i.type==='income'?'in':''}">${fmt(i.done?i.done.amount:i.amount)}</div>${st}</div>`;
 }
@@ -599,15 +613,20 @@ function viewMonth(){
   const items=dueItems(mk);ui.fixMap={};items.forEach(i=>ui.fixMap[i.key]=i);
   const outs=items.filter(i=>i.type!=='income'),ins=items.filter(i=>i.type==='income');
   const left=a=>a.filter(i=>!i.done).reduce((s,i)=>s+i.amount,0);
-  return `<div class="head"><button class="nav" data-act="mon" data-d="-1" aria-label="Tháng trước">‹</button><div class="mid"><b>${mLabel(mk)}</b></div><button class="nav" data-act="mon" data-d="1" ${cur?'disabled':''} aria-label="Tháng sau">›</button></div>
-  <div class="card"><div class="stats3"><div><small>Thu</small><b class="in">${fmt(inc)}</b></div><div><small>Chi</small><b class="out">${fmt(exp)}</b></div><div><small>Còn lại</small><b>${fmt(inc-exp)}</b></div></div>${chartHtml()}</div>
+  const fut=mk>T.slice(0,7),maxMk=addMonths(T.slice(0,7),12);
+  /* Tháng sau: Thu/Chi là số dự kiến từ các khoản cố định (chưa gồm chi sinh hoạt và trả thẻ) */
+  const pIn=ins.reduce((s,i)=>s+i.amount,0),pOut=outs.filter(i=>i.type==='expense').reduce((s,i)=>s+i.amount,0);
+  return `<div class="head"><button class="nav" data-act="mon" data-d="-1" aria-label="Tháng trước">‹</button><div class="mid"><b>${mLabel(mk)}</b>${fut?'<small>Xem trước · dự kiến</small>':cur?'':`<small><a href="#" data-act="monNow" style="color:var(--accent)">Về tháng này</a></small>`}</div><button class="nav" data-act="mon" data-d="1" ${mk>=maxMk?'disabled':''} aria-label="Tháng sau">›</button></div>
+  ${fut?`<div class="card fut"><div class="stats3"><div><small>Thu dự kiến</small><b class="in">${fmt(pIn)}</b></div><div><small>Chi cố định</small><b class="out">${fmt(pOut)}</b></div><div><small>Còn lại</small><b>${fmt(pIn-pOut)}</b></div></div>
+    <p class="hint" style="text-align:center">Chỉ tính các khoản thu chi cố định và trả góp, chưa gồm chi sinh hoạt hằng ngày và thanh toán thẻ. Xem đầy đủ hơn ở tab Dự báo.</p></div>`
+  :`<div class="card"><div class="stats3"><div><small>Thu</small><b class="in">${fmt(inc)}</b></div><div><small>Chi</small><b class="out">${fmt(exp)}</b></div><div><small>Còn lại</small><b>${fmt(inc-exp)}</b></div></div>${chartHtml()}</div>`}
   <div class="card"><div class="ch"><h3>Chi cố định</h3><small class="muted">${outs.length?(left(outs)?'Còn phải trả '+fmt(left(outs)):'Đã trả hết ✓'):''}</small></div>
     ${outs.map(fixRow).join('')||'<div class="empty">Chưa có khoản nào</div>'}${fixForm('expense')}
     ${state.loans.length||state.accounts.some(a=>isDebt(a))?'<p class="hint">Trả góp và thẻ tín dụng sửa ở tab Tài khoản. Chạm tên khoản khác để sửa.</p>':''}</div>
   <div class="card"><div class="ch"><h3>Thu hằng tháng</h3><small class="muted">${ins.length?(left(ins)?'Còn chờ nhận '+fmt(left(ins)):'Đã nhận hết ✓'):''}</small></div>
     ${ins.map(fixRow).join('')||'<div class="empty">Chưa có khoản nào</div>'}${fixForm('income')}</div>
-  <div class="card"><h3>Chi vào đâu</h3>${rows.length?rows.map(([c,v])=>`<div class="cat"><div class="t"><span>${ICON[c]||'📦'} ${esc(c)}</span><b>${fmt(v)}</b></div><div class="bar"><i style="width:${v/max*100}%"></i></div></div>`).join(''):`<div class="empty">Chưa có khoản chi.</div>`}</div>
-  ${interestCard(mk)}`;
+  ${fut?'':`<div class="card"><h3>Chi vào đâu</h3>${rows.length?rows.map(([c,v])=>`<div class="cat"><div class="t"><span>${ICON[c]||'📦'} ${esc(c)}</span><b>${fmt(v)}</b></div><div class="bar"><i style="width:${v/max*100}%"></i></div></div>`).join(''):`<div class="empty">Chưa có khoản chi.</div>`}</div>
+  ${interestCard(mk)}`}`;
 }
 function interestCard(mk){
   const m=interestIn(mk),y=interestIn(mk.slice(0,4)),all=interestIn('');
@@ -866,40 +885,46 @@ function viewSetup(){
   const ao=sel=>d.accounts.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.name||'(chưa đặt tên)')}</option>`).join('');
   const f=(sec,i,k,v,ph,mode)=>`<input data-sec="${sec}" data-i="${i}" data-f="${k}" value="${esc(v)}" ${ph?`placeholder="${ph}"`:''} ${mode==='money'?'class="money" inputmode="numeric"':mode==='num'?'inputmode="numeric"':mode==='dec'?'inputmode="decimal"':''}>`;
   const L=(label,inner)=>`<label class="fl">${label}${inner}</label>`;
-  const head=(sec,i,n,title,sub)=>`<div class="ehead"><span class="enum">${n}</span><b>${esc(title)}</b>${sub?`<small>${sub}</small>`:''}<button class="edel" data-act="delRow" data-sec="${sec}" data-i="${i}" aria-label="Xóa ${esc(title)}">✕ Xóa</button></div>`;
+  /* Sửa thiết lập: mặc định thu gọn từng khoản (lần đầu thiết lập thì mở hết); ▲▼ để sắp xếp thủ công */
+  const isOpen=id=>!edit||ui.open.has(id);
+  const head=(sec,i,n,title,sub,id)=>`<div class="ehead" data-act="toggleItem" data-id="${id}"><span class="enum">${n}</span><span class="ett"><b>${esc(title)}</b>${sub?`<small>${sub}</small>`:''}</span>
+    <span class="emove"><button data-act="moveRow" data-sec="${sec}" data-i="${i}" data-d="-1" aria-label="Đưa lên">▲</button><button data-act="moveRow" data-sec="${sec}" data-i="${i}" data-d="1" aria-label="Đưa xuống">▼</button></span>
+    <button class="edel" data-act="delRow" data-sec="${sec}" data-i="${i}" aria-label="Xóa ${esc(title)}">✕</button><span class="echev">${isOpen(id)?'▾':'▸'}</span></div>`;
+  const card=(id,h,body)=>`<div class="ecard ${isOpen(id)?'':'closed'}">${h}${isOpen(id)?body:''}</div>`;
   const sel=(sec,i,k,opts,v)=>`<select data-sec="${sec}" data-i="${i}" data-f="${k}">${opts.map(([o,l])=>`<option value="${o}" ${o===v?'selected':''}>${l}</option>`).join('')}</select>`;
-  const section=(id,cls,icon,title,count,body,add,hint)=>`<section class="ssec ${cls}" id="${id}"><div class="shead">${icon} ${title}<small>${count} mục</small></div>${hint?`<p class="hint" style="margin:6px 2px 0">${hint}</p>`:''}${body}${add}</section>`;
+  const section=(id,cls,icon,title,count,body,add,hint,sortSec,sortType)=>{const closed=ui.closedSec.has(id),dir=(ui.sortDir||{})[(sortSec||'')+(sortType||'')];
+    return `<section class="ssec ${cls}" id="${id}"><div class="shead" data-act="toggleSec" data-id="${id}">${icon} ${title}<small>${count} mục ${closed?'▸':'▾'}</small></div>
+    ${closed?'':`${count?`<div class="stool">${sortSec?`<button data-act="sortSec" data-sec="${sortSec}" ${sortType?`data-type="${sortType}"`:''}>↕ Theo số tiền${dir==='desc'?' (lớn → nhỏ)':dir==='asc'?' (nhỏ → lớn)':''}</button>`:''}${edit?`<button data-act="openSec" data-id="${id}">Mở hết</button><button data-act="foldSec" data-id="${id}">Thu gọn hết</button>`:''}</div>`:''}
+    ${hint?`<p class="hint" style="margin:6px 2px 0">${hint}</p>`:''}${body}${add}`}</section>`};
   const addBtn=(label,sec,type)=>`<button class="addbtn" data-act="addRow" data-sec="${sec}" ${type?`data-type="${type}"`:''}>＋ ${label}</button>`;
   const recs=type=>d.recurring.map((r,i)=>[r,i]).filter(([r])=>r.type===type);
-  const rec=type=>recs(type).map(([r,i],n)=>`<div class="ecard">
-    ${head('recurring',i,n+1,r.name||(type==='income'?'Khoản thu mới':'Khoản chi mới'),r.cur==='USD'&&r.usd?fmtUsd(r.usd):r.amount?fmt(r.amount):'')}
+  const rec=type=>recs(type).map(([r,i],n)=>card(r.id,head('recurring',i,n+1,r.name||(type==='income'?'Khoản thu mới':'Khoản chi mới'),
+      [r.cur==='USD'&&r.usd?fmtUsd(r.usd)+' ≈ '+fmt(recAmount(r)):r.amount?fmt(r.amount):'',r.day?'ngày '+r.day:''].filter(Boolean).join(' · '),r.id),`
     <div class="grid2">${L('Tên khoản',f('recurring',i,'name',r.name,type==='income'?'VD: Lương':'VD: Thuê nhà'))}${r.cur==='USD'?L('Số tiền (USD)',f('recurring',i,'usd',fmtDec(r.usd),'VD: 20','dec')):L('Số tiền (VNĐ)',f('recurring',i,'amount',r.amount?fmtN(r.amount):'','0','money'))}</div>
     <div class="grid2">${L('Loại tiền',sel('recurring',i,'cur',[['VND','VNĐ'],['USD','USD']],r.cur==='USD'?'USD':'VND'))}${r.cur==='USD'?L('Phí ngoại tệ (%)',f('recurring',i,'fee',fmtDec(feeOf(r)),'VD: 2,5','dec')):'<span></span>'}</div>
-    <div class="grid2">${L('Ngày trong tháng',f('recurring',i,'day',r.day,'1-31','num'))}${L(type==='income'?'Nhận vào tài khoản':'Trả từ tài khoản',`<select data-sec="recurring" data-i="${i}" data-f="acc">${ao(r.acc)}</select>`)}</div></div>`).join('');
+    <div class="grid2">${L('Ngày trong tháng',f('recurring',i,'day',r.day,'1-31','num'))}${L(type==='income'?'Nhận vào tài khoản':'Trả từ tài khoản',`<select data-sec="recurring" data-i="${i}" data-f="acc">${ao(r.acc)}</select>`)}</div>`)).join('');
   const brandSel=(a,i)=>`<div class="brandrow"><div class="aic">${accIcon(a)}</div><select data-sec="accounts" data-i="${i}" data-f="brand" aria-label="Ngân hàng hoặc ví"><option value="">${a.type==='wallet'?'— Chọn ví điện tử —':a.type==='paylater'?'— Chọn dịch vụ trả sau —':'— Chọn ngân hàng —'}</option>
       ${[['bank','Ngân hàng'],['wallet','Ví điện tử'],['paylater','Mua trước trả sau']].sort((p,q)=>(q[0]===(a.type==='credit'?'bank':a.type))-(p[0]===(a.type==='credit'?'bank':a.type))).map(([t,l])=>`<optgroup label="${l}">${BRANDS.filter(b=>b[3]===t).map(b=>`<option value="${b[0]}" ${a.brand===b[0]?'selected':''}>${esc(b[1])}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
-  const accs=d.accounts.map((a,i)=>`<div class="ecard">
-    ${head('accounts',i,i+1,a.name||'Tài khoản mới',ACC_TYPES[a.type])}
+  const accs=d.accounts.map((a,i)=>card(a.id,head('accounts',i,i+1,a.name||'Tài khoản mới',ACC_TYPES[a.type]+(a.opening?' · '+(isDebt(a)?'nợ ':'')+fmt(a.opening):''),a.id),`
     ${L('Loại tài khoản',sel('accounts',i,'type',Object.entries(ACC_TYPES),a.type))}
     ${a.type!=='cash'?`<div class="fl">${a.type==='wallet'?'Ví điện tử':a.type==='paylater'?'Dịch vụ trả sau':'Ngân hàng'}</div>${brandSel(a,i)}`:''}
     <div class="grid2">${L('Tên hiển thị',f('accounts',i,'name',a.name,'VD: Vietcombank'))}${L(isDebt(a)?'Dư nợ hiện tại':'Số dư hiện tại',f('accounts',i,'opening',a.opening?fmtN(a.opening):'','0','money'))}</div>
     ${isDebt(a)?`<div class="esub">${a.type==='credit'?'Thông tin thẻ tín dụng':'Thông tin trả sau'}</div>
       <div class="grid2">${L('Hạn mức',f('accounts',i,'limit',a.limit?fmtN(a.limit):'','VD: 30.000.000','money'))}${L('Ngày đến hạn trả',f('accounts',i,'dueDay',a.dueDay||'','1-31','num'))}</div>
-      <div class="grid2">${L('Lãi/phí (%/tháng)',f('accounts',i,'rate',a.rate?String(a.rate).replace('.',','):'','VD: 2,5','dec'))}${L('Trả nợ từ',`<select data-sec="accounts" data-i="${i}" data-f="payFrom">${ao(a.payFrom)}</select>`)}</div>`:''}</div>`).join('');
-  const loans=d.loans.map((l,i)=>`<div class="ecard">
-    ${head('loans',i,i+1,l.name||'Khoản trả góp mới',l.remaining?`còn ${l.remaining} kỳ`:'')}
+      <div class="grid2">${L('Lãi/phí (%/tháng)',f('accounts',i,'rate',a.rate?String(a.rate).replace('.',','):'','VD: 2,5','dec'))}${L('Trả nợ từ',`<select data-sec="accounts" data-i="${i}" data-f="payFrom">${ao(a.payFrom)}</select>`)}</div>`:''}`)).join('');
+  const loans=d.loans.map((l,i)=>card(l.id,head('loans',i,i+1,l.name||'Khoản trả góp mới',[l.amount?fmt(l.amount)+'/kỳ':'',l.remaining?`còn ${l.remaining} kỳ`:''].filter(Boolean).join(' · '),l.id),`
     <div class="grid2">${L('Tên khoản',f('loans',i,'name',l.name,'VD: Điện thoại'))}${L('Tiền mỗi kỳ',f('loans',i,'amount',l.amount?fmtN(l.amount):'','0','money'))}</div>
     <div class="grid2">${L('Còn bao nhiêu kỳ',f('loans',i,'remaining',l.remaining||'','VD: 7','num'))}${L('Ngày trả hằng tháng',f('loans',i,'day',l.day,'1-31','num'))}</div>
-    <div class="grid2">${L('Trong đó tiền lãi/kỳ',f('loans',i,'interest',l.interest?fmtN(l.interest):'','Không bắt buộc','money'))}${L('Trả từ tài khoản',`<select data-sec="loans" data-i="${i}" data-f="acc">${ao(l.acc)}</select>`)}</div></div>`).join('');
+    <div class="grid2">${L('Trong đó tiền lãi/kỳ',f('loans',i,'interest',l.interest?fmtN(l.interest):'','Không bắt buộc','money'))}${L('Trả từ tài khoản',`<select data-sec="loans" data-i="${i}" data-f="acc">${ao(l.acc)}</select>`)}</div>`)).join('');
   const nExp=recs('expense').length,nInc=recs('income').length;
   return `<h1>${edit?'Sửa thiết lập':'Bắt đầu'}</h1><p class="muted" style="margin:0">${edit?'Sửa từng mục bên dưới rồi bấm Lưu.':'Điền số dư hiện tại (xem trong MISA). Ô nào chưa rõ cứ để trống, sửa sau được.'}</p>
   ${!edit?`<button class="ghost" data-act="showSync">☁️ Đã dùng trên máy khác? Lấy dữ liệu về</button>${ui.showSync?syncHtml():''}
   <button class="ghost" data-act="sample">Chỉ xem thử? Dùng dữ liệu mẫu</button>`:''}
   <div class="snav"><button data-act="jump" data-id="s-acc">💳 Tài khoản (${d.accounts.length})</button><button data-act="jump" data-id="s-loan">📆 Trả góp (${d.loans.length})</button><button data-act="jump" data-id="s-exp">💸 Chi cố định (${nExp})</button><button data-act="jump" data-id="s-inc">💰 Thu nhập (${nInc})</button></div>
-  ${section('s-acc','s-acc','💳','Tài khoản & số dư',d.accounts.length,accs,addBtn('Thêm tài khoản','accounts'))}
+  ${section('s-acc','s-acc','💳','Tài khoản & số dư',d.accounts.length,accs,addBtn('Thêm tài khoản','accounts'),'','accounts')}
   ${section('s-loan','s-loan','📆','Trả góp',d.loans.length,loans,addBtn('Thêm khoản trả góp','loans'))}
-  ${section('s-exp','s-exp','💸','Chi cố định hằng tháng',nExp,rec('expense'),addBtn('Thêm khoản chi','recurring','expense'),'Khoản nào để trống số tiền sẽ được bỏ qua.')}
-  ${section('s-inc','s-inc','💰','Thu nhập hằng tháng',nInc,rec('income'),addBtn('Thêm khoản thu','recurring','income'),'Job làm thêm không đều thì ghi theo từng lần nhận ở tab Ghi sổ.')}
+  ${section('s-exp','s-exp','💸','Chi cố định hằng tháng',nExp,rec('expense'),addBtn('Thêm khoản chi','recurring','expense'),'Khoản nào để trống số tiền sẽ được bỏ qua.','recurring','expense')}
+  ${section('s-inc','s-inc','💰','Thu nhập hằng tháng',nInc,rec('income'),addBtn('Thêm khoản thu','recurring','income'),'Job làm thêm không đều thì ghi theo từng lần nhận ở tab Ghi sổ.','recurring','income')}
   <div class="savebar">${edit?`<button class="outline" data-act="cancelSetup" style="flex:0 0 90px">Hủy</button>`:''}<button class="primary" data-act="finish">${edit?'💾 Lưu thay đổi':'Bắt đầu ghi sổ'}</button></div>`;
 }
 const CAT_GUESS=n=>/google|apple|icloud|a\.?i|chatgpt|claude|youtube|netflix|spotify/i.test(n)?'Đăng ký số':/nhà/i.test(n)?'Thuê nhà':/vợ/i.test(n)?'Vợ':/con|học|sữa/i.test(n)?'Con cái':/điện|nước|net|wifi|gas/i.test(n)?'Điện nước':/mua|shopee|lazada|tiki|siêu thị/i.test(n)?'Mua sắm':/ăn|chợ/i.test(n)?'Ăn uống':'Khác';
@@ -969,6 +994,7 @@ const ACT={
   cat(el){ui.cat=el.dataset.v;ui.more=false;render()},
   more(){ui.more=!ui.more;render()},
   mktReload(){loadMarket(true)},
+  monNow(el,e){e.preventDefault();ui.month=today().slice(0,7);ui.fix=null;render()},
   addCar(){const n=$('#carName').value.trim();if(!n){toast('Nhập tên mẫu xe');return}
     saveCars(cs=>{if(!cs.some(c=>norm2(c.name)===norm2(n)))cs.push({id:carSlug(n)+'-'+uid().slice(0,4),name:n})});toast('Đã thêm '+n)},
   delCar(el){const c=carsOf().find(x=>x.id===el.dataset.id);if(!c||!confirm('Bỏ theo dõi giá xe "'+c.name+'"?'))return;saveCars(cs=>{const i=cs.findIndex(x=>x.id===c.id);if(i>=0)cs.splice(i,1)})},
@@ -1013,7 +1039,7 @@ const ACT={
   recon(){ui.recon=!ui.recon;render()},
   applyRecon(){let c=0;document.querySelectorAll('.recIn').forEach(inp=>{if(!inp.value.trim())return;const a=accById(inp.dataset.id),v=parseAmt(inp.value),diff=(isDebt(a)?-v:v)-bal(a.id,ui.date);if(diff){state.tx.push({id:uid(),ts:Date.now()+c,date:ui.date,type:'adjust',amount:diff,cat:null,acc:a.id,note:'Điều chỉnh số dư'});c++}});
     ui.recon=false;persist();render();toast(c?`Đã điều chỉnh ${c} tài khoản`:'Số dư đã khớp')},
-  mon(el){ui.month=addMonths(ui.month,+el.dataset.d);ui.fix=null;render()},
+  mon(el){const m=addMonths(ui.month,+el.dataset.d),max=addMonths(today().slice(0,7),12);ui.month=m>max?max:m;ui.fix=null;render()},
   payFix(el){const i=ui.fixMap[el.dataset.key];if(!i)return;const v=prompt((i.type==='income'?'Số tiền nhận: ':'Số tiền trả: ')+i.name+(i.usd?'\n'+i.usdNote+'\nSửa theo số tiền thực bị trừ nếu khác:':''),fmtN(i.amount));if(v===null)return;const amount=parseAmt(v);if(!amount){toast('Số tiền không hợp lệ');return}
     const T=today(),t={id:uid(),ts:Date.now(),date:ui.month===T.slice(0,7)?T:i.date,type:i.type,amount,cat:i.cat,acc:i.acc,note:i.name,ref:i.key};if(i.toAcc)t.toAcc=i.toAcc;usdTag(t,i);state.tx.push(t);persist();render();toast('Đã ghi: '+i.name)},
   undoFix(el){const i=ui.fixMap[el.dataset.key];if(!i||!i.done)return;if(!confirm('Bỏ đánh dấu "'+i.name+'"? Giao dịch đã ghi sẽ bị xóa.'))return;state.tx=state.tx.filter(t=>t.id!==i.done.id);persist();render()},
@@ -1035,7 +1061,19 @@ const ACT={
     if(s==='accounts')d.accounts.push({id:uid(),name:'',type:'wallet',opening:0,dueDay:0,payFrom:null});
     if(s==='loans')d.loans.push({id:uid(),name:'',amount:0,remaining:0,day:15,acc:b});
     if(s==='recurring'){const t=el.dataset.type;d.recurring.push({id:uid(),name:'',type:t,cat:null,day:1,acc:b,amount:0})}
-    render()},
+    ui.open.add(d[s][d[s].length-1].id);render()},
+  toggleItem(el){const id=el.dataset.id;ui.open.has(id)?ui.open.delete(id):ui.open.add(id);render()},
+  toggleSec(el){const id=el.dataset.id;ui.closedSec.has(id)?ui.closedSec.delete(id):ui.closedSec.add(id);render()},
+  openSec(el){secItems(el.dataset.id).forEach(x=>ui.open.add(x.id));render()},
+  foldSec(el){secItems(el.dataset.id).forEach(x=>ui.open.delete(x.id));render()},
+  moveRow(el){const s=el.dataset.sec,i=+el.dataset.i,dir=+el.dataset.d,arr=ui.draft[s];let j=i+dir;
+    if(s==='recurring')while(j>=0&&j<arr.length&&arr[j].type!==arr[i].type)j+=dir;
+    if(j<0||j>=arr.length)return;[arr[i],arr[j]]=[arr[j],arr[i]];ui.sortDir={};render()},
+  sortSec(el){const s=el.dataset.sec,t=el.dataset.type||'',arr=ui.draft[s],k=s+t;ui.sortDir=ui.sortDir||{};
+    const dir=ui.sortDir[k]==='desc'?'asc':'desc';ui.sortDir={[k]:dir};
+    const val=s==='accounts'?(a=>+a.opening||0):(r=>(r.cur==='USD'?recAmount(r):+r.amount)||0),cmp=(a,b)=>dir==='desc'?val(b)-val(a):val(a)-val(b);
+    if(s==='recurring'){const idx=arr.map((r,i)=>i).filter(i=>arr[i].type===t),items=idx.map(i=>arr[i]).sort(cmp);idx.forEach((i,n)=>arr[i]=items[n])}else arr.sort(cmp);
+    render();toast(dir==='desc'?'Đã xếp số tiền lớn → nhỏ':'Đã xếp số tiền nhỏ → lớn')},
   delRow(el){const s=el.dataset.sec,i=+el.dataset.i,row=ui.draft[s][i];
     if(s==='accounts'&&state&&state.tx&&state.tx.some(t=>t.acc===row.id||t.toAcc===row.id)&&!confirm('Tài khoản này đã có giao dịch. Vẫn xóa?'))return;
     ui.draft[s].splice(i,1);render()},
