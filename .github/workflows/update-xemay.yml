@@ -1,0 +1,38 @@
+# Mỗi tuần tự lấy bảng giá xe máy mới Honda/Yamaha từ trang chính thức và cập nhật xemay.json cho app.
+name: Cập nhật bảng giá xe máy
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'   # 8:00 sáng thứ Hai (giờ Việt Nam)
+  workflow_dispatch: {}    # cho phép bấm chạy tay trong tab Actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-xemay
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lấy bảng giá mới
+        shell: pwsh
+        run: ./update-xemay.ps1
+
+      - name: Lưu nếu giá có thay đổi
+        run: |
+          # Chỉ commit khi danh sách xe/giá đổi (bỏ qua ngày cập nhật)
+          if git diff --quiet -- xemay.json; then echo "Không có thay đổi"; exit 0; fi
+          old=$(git show HEAD:xemay.json | sed -E 's/"updated":"[^"]*",//')
+          new=$(sed -E 's/"updated":"[^"]*",//' xemay.json)
+          if [ "$old" = "$new" ]; then echo "Giá không đổi, chỉ khác ngày - bỏ qua"; git checkout -- xemay.json; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add xemay.json
+          git commit -m "Tự cập nhật bảng giá xe máy $(date +%Y-%m-%d)"
+          git push

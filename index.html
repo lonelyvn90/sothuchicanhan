@@ -939,7 +939,7 @@ function xemayHtml(){
     <div class="bbbrands"><button class="chip ${!cat?'on':''}" data-act="xmCat" data-v="">Tất cả</button>${cats.map(c=>`<button class="chip ${cat===c?'on':''}" data-act="xmCat" data-v="${esc(c)}">${esc(c)}</button>`).join('')}
       <button class="chip" data-act="xmSort">↕ ${ui.xmSort==='desc'?'Giá cao → thấp':ui.xmSort==='asc'?'Giá thấp → cao':'Theo hãng'}</button></div>
     <div class="xmgrid">${items.map((it)=>card(it,src.items.indexOf(it))).join('')||'<div class="empty">Không có mẫu nào.</div>'}</div>
-    <p class="hint">Giá bán lẻ đề xuất của hãng (chưa gồm phí trước bạ, biển số), cập nhật ${xm.updated?dmy(xm.updated):''}. Nguồn: <a href="${esc((xm[br]||{}).url||'#')}" target="_blank" rel="noopener" style="color:var(--accent)">${br==='honda'?'honda.com.vn':'yamaha-motor.com.vn'} ↗</a>${br==='yamaha'?'. Yamaha chỉ công bố giá khởi điểm từng mẫu.':''}</p></div>`;
+    <p class="hint">Giá bán lẻ đề xuất của hãng (chưa gồm phí trước bạ, biển số), giá đổi lần gần nhất ${xm.updated?dmy(xm.updated):''}; tự kiểm tra lại mỗi sáng thứ Hai. Nguồn: <a href="${esc((xm[br]||{}).url||'#')}" target="_blank" rel="noopener" style="color:var(--accent)">${br==='honda'?'honda.com.vn':'yamaha-motor.com.vn'} ↗</a>${br==='yamaha'?'. Yamaha chỉ công bố giá khởi điểm từng mẫu.':''}</p></div>`;
 }
 function saveCars(fn){const cars=JSON.parse(JSON.stringify(carsOf()));fn(cars);state.cars=cars;persist();render()}
 /* Dữ liệu cũ (một giá chung) được coi là giá Bách Hóa Xanh */
