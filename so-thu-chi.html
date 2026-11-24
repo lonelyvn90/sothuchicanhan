@@ -134,6 +134,15 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .ehead b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ehead small{color:var(--muted);font-size:12px;white-space:nowrap}
 .edel{color:var(--red);font-size:12px;border:1px solid var(--line);border-radius:8px;width:30px;height:30px;flex:none}
+.acctool{margin:0 0 4px}.acctool button{color:var(--accent)}
+.pdform{border:1.5px solid var(--mc,var(--accent));border-radius:12px;padding:10px;margin:8px 0;background:var(--bg)}
+.pdform .seg button.on{background:var(--mc,var(--accent));color:#fff}
+.pdform .fl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-top:8px}.pdform .fl input,.pdform .fl select{margin-top:3px}
+.pdsec{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 2px}.pdsec.out{color:var(--red)}.pdsec.in{color:var(--green)}
+.pdrow{padding:9px 0;border-top:1px solid var(--line)}.pdrow .ch{align-items:flex-start}.pdrow.done{opacity:.7}
+.pdt{display:flex;flex-direction:column;min-width:0}.pdt small{font-size:12px;color:var(--muted)}
+.pdrow .bar{height:5px;margin:5px 0 2px}
+.pddone summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:10px}
 .plan{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:5px 8px;flex:none;white-space:nowrap}
 .card.fut{border-style:dashed}
 .ehead{cursor:pointer}.ett{flex:1;min-width:0;display:flex;flex-direction:column}.ett b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ett small{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -305,7 +314,7 @@ function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):nul
 /* Ghi nhận thay đổi để gộp dữ liệu giữa các máy:
    - giao dịch sửa: t.mt = lúc sửa; giao dịch xóa: state.deleted[id] = lúc xóa
    - tài khoản, khoản hằng tháng, mẫu ghi nhanh…: state.cfgAt = lúc sửa gần nhất */
-const CFG_KEYS=['setup','startDate','accounts','loans','recurring','quick','fuel','fuelDate','food','cars','closed'];
+const CFG_KEYS=['setup','startDate','accounts','loans','recurring','quick','fuel','fuelDate','food','cars','pdebts','accSort','closed'];
 const cfgOf=s=>JSON.stringify(CFG_KEYS.map(k=>s[k]===undefined?null:s[k]));
 const snap=s=>s&&s.tx?{cfg:cfgOf(s),tx:new Map(s.tx.map(t=>[t.id,JSON.stringify(t)]))}:null;
 let base=null;
@@ -455,7 +464,12 @@ let viewT;addEventListener('scroll',()=>{clearTimeout(viewT);viewT=setTimeout(sa
 
 const accById=id=>state.accounts.find(a=>a.id===id);
 const accName=id=>{const a=accById(id);return a?a.name:'(đã xóa)'};
-function bal(id,upto){const a=accById(id);let b=a?+a.opening||0:0;for(const t of state.tx){if(upto&&t.date>upto)continue;if(t.acc===id){if(t.type==='income'||t.type==='adjust')b+=t.amount;else b-=t.amount}if(t.type==='transfer'&&t.toAcc===id)b+=t.amount}return b}
+function bal(id,upto){const a=accById(id);let b=a?+a.opening||0:0;for(const t of state.tx){if(upto&&t.date>upto)continue;if(t.acc===id){if(t.type==='income'||t.type==='adjust'||(t.type==='pdebt'&&t.flow==='in'))b+=t.amount;else b-=t.amount}if(t.type==='transfer'&&t.toAcc===id)b+=t.amount}return b}
+/* Vay nợ cá nhân: state.pdebts=[{id,who,dir:'borrow'|'lend',amount,date,due,note,acc}]
+   Tiền vào/ra tài khoản ghi bằng giao dịch type 'pdebt' (flow in/out, kind open/pay) — không tính là thu hay chi */
+const pdebtsOf=()=>state.pdebts||[];
+const pdPaid=p=>sum(state.tx.filter(t=>t.type==='pdebt'&&t.pid===p.id&&t.kind==='pay'));
+const pdLeft=p=>Math.max(0,p.amount-pdPaid(p));
 const loanLeft=l=>Math.max(0,(l.remaining||0)-state.tx.filter(t=>t.ref==='l:'+l.id).length);
 
 /* Khoản hằng tháng tính bằng USD: đổi sang VNĐ theo tỷ giá mới nhất (tab Thị trường) + phí chuyển đổi ngoại tệ của thẻ */
@@ -493,12 +507,13 @@ function dueItems(mk){
 
 /* ---------- Ghi sổ ---------- */
 function txRow(t){
-  const ic=t.type==='transfer'?'🔁':t.type==='adjust'?'⚖️':(ICON[t.cat]||'📦');
-  const title=t.note||(t.type==='transfer'?'Chuyển tiền':t.type==='adjust'?'Điều chỉnh số dư':t.cat);
-  const sub=t.type==='transfer'?esc(accName(t.acc))+' → '+esc(accName(t.toAcc)):esc(accName(t.acc));
+  const pd=t.type==='pdebt';
+  const ic=t.type==='transfer'?'🔁':t.type==='adjust'?'⚖️':pd?'🤝':(ICON[t.cat]||'📦');
+  const title=t.note||(t.type==='transfer'?'Chuyển tiền':t.type==='adjust'?'Điều chỉnh số dư':pd?'Vay nợ cá nhân':t.cat);
+  const sub=t.type==='transfer'?esc(accName(t.acc))+' → '+esc(accName(t.toAcc)):pd&&!t.acc?'Không qua tài khoản':esc(accName(t.acc))+(pd?' · không tính thu/chi':'');
   const cls=t.type==='income'?'in':t.type==='expense'?'out':'mv';
-  const amt=t.type==='income'?'+'+fmt(t.amount):t.type==='expense'?'−'+fmt(t.amount):t.type==='adjust'&&t.amount>0?'+'+fmt(t.amount):fmt(t.amount);
-  return `<li class="tx ${ui.editing===t.id?'editing':''}" ${t.type!=='adjust'?`data-act="edit" data-id="${t.id}"`:''}><div class="ic">${ic}</div><div class="bd"><b>${esc(title)}</b><small>${sub}</small></div><div class="am ${cls}">${amt}</div><button class="del" data-act="del" data-id="${t.id}" aria-label="Xóa">✕</button></li>`;
+  const amt=t.type==='income'||(pd&&t.flow==='in')?'+'+fmt(t.amount):t.type==='expense'||pd?'−'+fmt(t.amount):t.type==='adjust'&&t.amount>0?'+'+fmt(t.amount):fmt(t.amount);
+  return `<li class="tx ${ui.editing===t.id?'editing':''}" ${t.type!=='adjust'&&!pd?`data-act="edit" data-id="${t.id}"`:''}><div class="ic">${ic}</div><div class="bd"><b>${esc(title)}</b><small>${sub}</small></div><div class="am ${cls}">${amt}</div><button class="del" data-act="del" data-id="${t.id}" aria-label="Xóa">✕</button></li>`;
 }
 function weekStrip(D){
   const T=today(),mon=addDays(D,-((parseD(D).getDay()+6)%7)),has=new Set(state.tx.map(t=>t.date)),L=['T2','T3','T4','T5','T6','T7','CN'];
@@ -558,8 +573,8 @@ function viewToday(){
     ${!ui.editing?`<button class="link" data-act="saveQuick" style="padding-bottom:0">☆ Lưu thành mẫu ghi nhanh</button>`:''}
   </div>`})()}
   ${(()=>{if(!txs.length)return `<div class="card"><div class="empty">Chưa ghi gì trong ngày này.</div></div>`;
-    const G=[['expense','💸 Khoản chi','out','−'],['income','💰 Khoản thu','in','+'],['other','🔁 Chuyển tiền & điều chỉnh','mv','']];
-    return G.map(([k,t,c,s])=>{const l=txs.filter(x=>k==='other'?(x.type==='transfer'||x.type==='adjust'):x.type===k);if(!l.length)return '';
+    const G=[['expense','💸 Khoản chi','out','−'],['income','💰 Khoản thu','in','+'],['other','🔁 Chuyển tiền, vay nợ & điều chỉnh','mv','']];
+    return G.map(([k,t,c,s])=>{const l=txs.filter(x=>k==='other'?(x.type==='transfer'||x.type==='adjust'||x.type==='pdebt'):x.type===k);if(!l.length)return '';
       const tot=k==='other'?0:sum(k==='expense'?l.filter(isSpend):l);
       return `<div class="card tgroup g-${k}"><div class="ch"><h3>${t} <small class="muted">(${l.length})</small></h3>${k!=='other'?`<b class="${c}">${s}${fmt(tot)}</b>`:''}</div><ul class="list">${l.map(txRow).join('')}</ul></div>`}).join('')})()}
   ${ui.recon?`<div class="card recon"><h3>Đối chiếu số dư</h3><p class="hint" style="margin:0 0 6px">Nhập số dư thật nếu khác với sổ. Để trống nếu đã khớp.</p>
@@ -667,7 +682,7 @@ function viewAccounts(){
   let dueSum=0;
   const debts=state.accounts.filter(a=>isDebt(a)).map(a=>{const v=Math.max(0,-bal(a.id)),it=dueOf('c:'+a.id),mi=monthInt[a.name]||0,ai=allInt[a.name]||0;
       if(it&&!it.done)dueSum+=it.amount;
-      return {ic:accIcon(a),name:a.name,lim:a.limit||0,v,
+      return {ic:accIcon(a),name:a.name,lim:a.limit||0,v,acc:a,
       sub:[ACC_TYPES[a.type],a.limit?`còn hạn mức <b class="${a.limit-v<a.limit*0.2?'late':''}">${fmtK(a.limit-v)}</b>/${fmtK(a.limit)}`:'',a.rate?`lãi ${String(a.rate).replace('.',',')}%/tháng`:''].filter(Boolean).join(' · '),
       extra:`<div class="dbox"><label class="stline"><span>🧾 Sao kê tháng ${+mk.slice(5)} phải thanh toán</span><input class="money" inputmode="numeric" data-st="${a.id}" value="${(a.stmt||{})[mk]?fmtN(a.stmt[mk]):''}" placeholder="Nhập số tiền"></label>
         ${(a.stmt||{})[mk]?'<div class="dline muted" style="margin-top:-2px">Số sao kê đã gồm lãi/phí. Lãi/phí ghi bên dưới chỉ để theo dõi, không cộng thêm vào số phải trả.</div>':''}
@@ -679,7 +694,13 @@ function viewAccounts(){
     .concat(state.loans.map(l=>{const n=loanLeft(l),it=dueOf('l:'+l.id);if(it&&!it.done)dueSum+=it.amount;
       return {ic:loanIcon(l.name),name:l.name,v:n*l.amount,sub:`Trả góp · còn ${n} kỳ × ${fmtK(l.amount)}${l.interest?` · còn phải trả lãi ${fmtK(l.interest*n)}`:''}`,
       extra:it?`<div class="dbox">${dueLine(it)}${l.interest?`<div class="dline">💸 Lãi trong kỳ này: <b>${fmt(l.interest)}</b></div>`:''}${!it.done?`<div class="drow"><button class="mini" data-act="payDebt" data-key="l:${l.id}">Trả kỳ này</button></div>`:''}</div>`:''}}));
-  const have=money.reduce((s,x)=>s+Math.max(0,x.v),0),owe=debts.reduce((s,x)=>s+x.v,0);
+  const pds=pdebtsOf(),lendLeft=pds.filter(p=>p.dir==='lend').reduce((s,p)=>s+pdLeft(p),0),borLeft=pds.filter(p=>p.dir==='borrow').reduce((s,p)=>s+pdLeft(p),0);
+  const have=money.reduce((s,x)=>s+Math.max(0,x.v),0)+lendLeft,owe=debts.reduce((s,x)=>s+x.v,0)+borLeft;
+  /* Sắp xếp: thủ công (thứ tự trong Sửa thiết lập, đổi bằng ▲▼) hoặc theo số tiền */
+  const so=state.accSort||'manual';
+  if(so!=='manual'){const c=(a,b)=>so==='desc'?b.v-a.v:a.v-b.v;money.sort(c);debts.sort(c)}
+  const mv=(a)=>ui.accEdit&&so==='manual'?`<div class="drow"><button class="mini" data-act="accMove" data-id="${a.id}" data-d="-1">▲ Lên</button><button class="mini" data-act="accMove" data-id="${a.id}" data-d="1">▼ Xuống</button></div>`:'';
+  const tool=`<div class="stool acctool"><button data-act="accSort">↕ ${so==='manual'?'Thủ công':so==='desc'?'Số tiền lớn → nhỏ':'Số tiền nhỏ → lớn'}</button>${so==='manual'?`<button data-act="accEdit">${ui.accEdit?'✓ Xong':'✋ Đổi thứ tự'}</button>`:''}</div>`;
   const mh=Math.max(0,...money.map(x=>x.v)),md=Math.max(0,...debts.map(x=>x.v));
   return `<div class="ch" style="align-items:center"><h1>Tài khoản</h1><div class="icbtns">
     <button class="icbtn" data-act="editSetup" title="Sửa tài khoản & khoản hằng tháng" aria-label="Sửa tài khoản và khoản hằng tháng">✏️</button>
@@ -688,8 +709,37 @@ function viewAccounts(){
       <div><span><i style="background:var(--green)"></i>Đang có</span><b>${fmt(have)}</b></div>
       <div><span><i style="background:var(--red)"></i>Còn nợ</span><b>${fmt(owe)}</b></div>
       ${have?`<small class="muted">Nợ bằng ${Math.round(owe/have*100)}% số tiền đang có</small>`:''}</div></div></div>
-  <div class="card"><div class="ch"><h3>💰 Đang có</h3><b class="in">${fmt(have)}</b></div>${money.map(x=>arow(accIcon(x.a),x.a.name,ACC_TYPES[x.a.type],x.v,mh,false)).join('')}</div>
-  ${debts.length?`<div class="card"><div class="ch"><h3>📉 Còn nợ</h3><b class="out">${fmt(owe)}</b></div>${dueSum?`<p class="hint" style="margin:-4px 0 4px">Tháng này còn phải trả <b class="out">${fmt(dueSum)}</b></p>`:''}${debts.map(x=>arow(x.ic,x.name,x.sub,x.v,x.lim||md,true,x.extra)).join('')}</div>`:''}`;
+  <div class="card"><div class="ch"><h3>💰 Đang có</h3><b class="in">${fmt(have-lendLeft)}</b></div>${tool}${money.map(x=>arow(accIcon(x.a),x.a.name,ACC_TYPES[x.a.type],x.v,mh,false,mv(x.a))).join('')}</div>
+  ${debts.length?`<div class="card"><div class="ch"><h3>📉 Còn nợ</h3><b class="out">${fmt(owe-borLeft)}</b></div>${dueSum?`<p class="hint" style="margin:-4px 0 4px">Tháng này còn phải trả <b class="out">${fmt(dueSum)}</b></p>`:''}${debts.map(x=>arow(x.ic,x.name,x.sub,x.v,x.lim||md,true,(x.acc?mv(x.acc):'')+x.extra)).join('')}</div>`:''}
+  ${pdebtHtml(lendLeft,borLeft)}`;
+}
+/* ---------- Vay nợ cá nhân ---------- */
+function pdebtHtml(lendLeft,borLeft){
+  const T=today(),pds=pdebtsOf(),f=ui.pdForm||{};
+  const ao=(sel,none)=>(none?`<option value="">${none}</option>`:'')+state.accounts.filter(a=>!isDebt(a)).map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.name)}</option>`).join('');
+  const newForm=f.mode==='new'?`<div class="pdform m-${f.dir==='lend'?'income':'expense'}">
+    <div class="seg"><button class="${f.dir!=='lend'?'on':''}" data-act="pdDir" data-v="borrow">Mình vay</button><button class="${f.dir==='lend'?'on':''}" data-act="pdDir" data-v="lend">Cho người khác vay</button></div>
+    <div class="grid2"><label class="fl">${f.dir==='lend'?'Người vay':'Vay của ai'}<input data-pd="who" value="${esc(f.who||'')}" placeholder="VD: Anh Nam"></label><label class="fl">Số tiền<input class="money" inputmode="numeric" data-pd="amount" value="${esc(f.amount||'')}" placeholder="0"></label></div>
+    <div class="grid2"><label class="fl">Ngày ${f.dir==='lend'?'cho vay':'vay'}<input type="date" data-pd="date" value="${f.date||T}"></label><label class="fl">Hẹn trả (không bắt buộc)<input type="date" data-pd="due" value="${f.due||''}"></label></div>
+    <label class="fl">${f.dir==='lend'?'Tiền lấy từ':'Tiền nhận vào'}<select data-pd="acc">${ao(f.acc===undefined?(state.accounts.find(a=>!isDebt(a))||{}).id:f.acc,'Không qua tài khoản (khoản nợ cũ)')}</select></label>
+    <label class="fl">Ghi chú<input data-pd="note" value="${esc(f.note||'')}" placeholder="Không bắt buộc"></label>
+    <div class="btnrow"><button class="outline" data-act="pdCancel" style="flex:0 0 80px">Hủy</button><button class="primary msave" data-act="pdSave">Lưu khoản ${f.dir==='lend'?'cho vay':'vay'}</button></div>
+    <p class="hint">Tiền vay/cho vay làm thay đổi số dư tài khoản nhưng <b>không tính là thu hay chi</b>.</p></div>`:'';
+  const row=p=>{const left=pdLeft(p),paid=pdPaid(p),late=left&&p.due&&p.due<T,lend=p.dir==='lend';
+    return `<div class="pdrow ${left?'':'done'}"><div class="ch"><span class="pdt"><b>${esc(p.who)}</b><small>${lend?'Cho vay':'Vay'} ${dmy(p.date)}${p.due?` · <span class="${late?'late':''}">${late?'quá hạn':'hẹn trả'} ${dmy(p.due)}</span>`:''}${p.note?' · '+esc(p.note):''}</small></span><b class="${lend?'in':'out'}">${fmt(left)}</b></div>
+      <div class="bar"><i style="width:${p.amount?paid/p.amount*100:0}%;background:var(--${lend?'green':'red'})"></i></div>
+      <small class="muted">${lend?'Đã thu về':'Đã trả'} ${fmt(paid)} / ${fmt(p.amount)}</small>
+      ${f.mode==='pay'&&f.id===p.id?`<div class="pdform"><div class="grid2"><label class="fl">${lend?'Số tiền thu về':'Số tiền trả'}<input id="pdAmt" class="money" inputmode="numeric" value="${fmtN(left)}"></label><label class="fl">${lend?'Nhận vào':'Trả từ'}<select id="pdAcc">${ao(p.acc||(state.accounts.find(a=>!isDebt(a))||{}).id,'Không qua tài khoản')}</select></label></div>
+        <div class="btnrow"><button class="outline" data-act="pdCancel" style="flex:0 0 80px">Hủy</button><button class="primary" data-act="pdPaySave">Lưu</button></div></div>`
+      :`<div class="drow">${left?`<button class="mini" data-act="pdPay" data-id="${p.id}">${lend?'＋ Thu về':'＋ Trả bớt'}</button>`:''}<button class="mini" style="color:var(--red)" data-act="pdDel" data-id="${p.id}">✕ Xóa</button></div>`}</div>`};
+  const open=pds.filter(p=>pdLeft(p)>0),done=pds.filter(p=>!pdLeft(p)),bor=open.filter(p=>p.dir!=='lend'),lend=open.filter(p=>p.dir==='lend');
+  return `<div class="card pdcard"><div class="ch" style="align-items:center"><h3>🤝 Vay nợ cá nhân</h3>${f.mode!=='new'?'<button class="mini" data-act="pdNew">＋ Thêm</button>':''}</div>
+    ${pds.length?`<div class="stats3" style="margin:4px 0 6px"><div><small>Mình đang nợ</small><b class="out">${fmt(borLeft)}</b></div><div><small>Người khác nợ mình</small><b class="in">${fmt(lendLeft)}</b></div><div><small>Chênh lệch</small><b>${fmt(lendLeft-borLeft)}</b></div></div>`:''}
+    ${newForm}
+    ${bor.length?`<div class="pdsec out">Mình nợ người khác</div>${bor.map(row).join('')}`:''}
+    ${lend.length?`<div class="pdsec in">Người khác nợ mình</div>${lend.map(row).join('')}`:''}
+    ${done.length?`<details class="pddone"><summary>Đã xong (${done.length})</summary>${done.map(row).join('')}</details>`:''}
+    ${!pds.length&&f.mode!=='new'?'<div class="empty">Chưa có khoản vay hay cho vay nào với người quen.</div>':''}</div>`;
 }
 
 /* ---------- Dự báo ---------- */
@@ -993,6 +1043,24 @@ const ACT={
   cat(el){ui.cat=el.dataset.v;ui.more=false;render()},
   more(){ui.more=!ui.more;render()},
   mktReload(){loadMarket(true)},
+  accSort(){const o=['manual','desc','asc'],c=state.accSort||'manual';state.accSort=o[(o.indexOf(c)+1)%3];ui.accEdit=false;persist();render()},
+  accEdit(){ui.accEdit=!ui.accEdit;render()},
+  accMove(el){const arr=state.accounts,i=arr.findIndex(a=>a.id===el.dataset.id),d=+el.dataset.d;if(i<0)return;let j=i+d;
+    while(j>=0&&j<arr.length&&isDebt(arr[j])!==isDebt(arr[i]))j+=d;if(j<0||j>=arr.length)return;[arr[i],arr[j]]=[arr[j],arr[i]];persist();render()},
+  pdNew(){ui.pdForm={mode:'new',dir:'borrow'};render()},
+  pdDir(el){ui.pdForm.dir=el.dataset.v;render()},
+  pdCancel(){ui.pdForm=null;render()},
+  pdSave(){const f=ui.pdForm,who=(f.who||'').trim(),amount=parseAmt(f.amount);if(!who||!amount){toast('Nhập tên người và số tiền');return}
+    const acc=f.acc===undefined?((state.accounts.find(a=>!isDebt(a))||{}).id||''):f.acc,p={id:uid(),who,dir:f.dir||'borrow',amount,date:f.date||today(),due:f.due||'',note:(f.note||'').trim(),acc};
+    state.pdebts=pdebtsOf().concat([p]);
+    if(acc)state.tx.push({id:uid(),ts:Date.now(),date:p.date,type:'pdebt',pid:p.id,kind:'open',flow:p.dir==='borrow'?'in':'out',amount,acc,note:p.dir==='borrow'?'Vay '+who:'Cho '+who+' vay'});
+    ui.pdForm=null;persist();render();toast('Đã lưu khoản '+(p.dir==='borrow'?'vay':'cho vay'))},
+  pdPay(el){ui.pdForm={mode:'pay',id:el.dataset.id};render()},
+  pdPaySave(){const p=pdebtsOf().find(x=>x.id===ui.pdForm.id);if(!p)return;const amount=Math.min(parseAmt($('#pdAmt').value),pdLeft(p)),acc=$('#pdAcc').value;if(!amount){toast('Nhập số tiền');return}
+    state.tx.push({id:uid(),ts:Date.now(),date:today(),type:'pdebt',pid:p.id,kind:'pay',flow:p.dir==='borrow'?'out':'in',amount,acc,note:p.dir==='borrow'?'Trả nợ '+p.who:p.who+' trả nợ'});
+    ui.pdForm=null;persist();render();toast(pdLeft(p)?'Đã ghi, còn '+fmt(pdLeft(p)):'Đã xong khoản này ✓')},
+  pdDel(el){const p=pdebtsOf().find(x=>x.id===el.dataset.id);if(!p||!confirm('Xóa khoản '+(p.dir==='lend'?'cho '+p.who+' vay':'vay '+p.who)+'? Các lần trả/thu ghi kèm cũng bị xóa.'))return;
+    state.pdebts=pdebtsOf().filter(x=>x.id!==p.id);state.tx=state.tx.filter(t=>t.pid!==p.id);persist();render()},
   monNow(el,e){e.preventDefault();ui.month=today().slice(0,7);ui.fix=null;render()},
   addCar(){const n=$('#carName').value.trim();if(!n){toast('Nhập tên mẫu xe');return}
     saveCars(cs=>{if(!cs.some(c=>norm2(c.name)===norm2(n)))cs.push({id:carSlug(n)+'-'+uid().slice(0,4),name:n})});toast('Đã thêm '+n)},
@@ -1098,6 +1166,7 @@ document.addEventListener('change',e=>{
   if(el.id==='toSel'){ui.toAcc=el.value;return}
   if(el.dataset.st){const a=accById(el.dataset.st);if(!a)return;const mk=today().slice(0,7),v=parseAmt(el.value);a.stmt=Object.assign({},a.stmt);
     if(v)a.stmt[mk]=v;else delete a.stmt[mk];persist();render();toast(v?'Đã lưu số phải thanh toán tháng này':'Đã xóa số sao kê');return}
+  if(el.dataset.pd){if(ui.pdForm)ui.pdForm[el.dataset.pd]=el.value;return}
   if(el.dataset.car){const id=el.dataset.car,kind=el.dataset.kind,v=parseAmt(el.value);
     saveCars(cs=>{const c=cs.find(x=>x.id===id);if(!c)return;const o=c[kind]||{};c[kind]=v?Object.assign({},o,{p:v,prev:o.p&&o.p!==v?o.p:o.prev||0,d:today()}):(o.yr?{yr:o.yr}:undefined)});toast(v?'Đã lưu giá xe':'Đã xóa giá');return}
   if(el.dataset.caryr){const id=el.dataset.caryr,y=parseInt(el.value)||0;saveCars(cs=>{const c=cs.find(x=>x.id===id);if(!c)return;c.used=Object.assign({},c.used,{yr:y>1980&&y<2100?y:undefined})});return}
