@@ -136,6 +136,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .edel{color:var(--red);font-size:12px;border:1px solid var(--line);border-radius:8px;width:30px;height:30px;flex:none}
 /* Ô icon trong tab Tài khoản rộng bằng nhau để thanh số tiền thẳng hàng */
 .arow .aic{width:62px;height:38px;flex:none}.arow .aic .logo{width:38px;height:38px}
+.adv.neg{border-color:var(--red);border-width:2px}
+.advl{margin:4px 0 0;padding-left:20px}.advl li{margin:10px 0;font-size:14px}.advl li>b{display:block;margin-bottom:2px}.advl li div{color:var(--text);opacity:.92;line-height:1.5}
 .xmgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .xmc{border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:2px;min-width:0;background:var(--card)}
 .xmc.open{grid-column:1/-1}
@@ -794,7 +796,7 @@ function forecast(days){
   const loanDebt=state.loans.reduce((s,l)=>s+left[l.id]*l.amount,0);
   const monthlyNeed=state.recurring.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0)+state.loans.filter(l=>left[l.id]>0).reduce((s,l)=>s+l.amount,0)+vExp*30;
   const byc={};past.forEach(t=>byc[t.cat]=(byc[t.cat]||0)+t.amount);const top=Object.entries(byc).sort((a,b)=>b[1]-a[1])[0];
-  return {days,end,start,card,liq,min,pts,tot,vExp,nd,loanDebt,monthlyNeed,income:tot.inc+tot.vInc,spend:tot.fix+tot.loan+tot.vExp,top:top&&{cat:top[0],perDay:top[1]/nd}};
+  return {days,end,start,card,liq,min,pts,tot,vExp,vInc,nd,loanDebt,monthlyNeed,income:tot.inc+tot.vInc,spend:tot.fix+tot.loan+tot.vExp,top:top&&{cat:top[0],perDay:top[1]/nd}};
 }
 function health(f){
   const em=f.monthlyNeed?Math.max(0,f.liq)/f.monthlyNeed:0,sr=f.income?(f.income-f.spend)/f.income:-1;
@@ -827,6 +829,45 @@ function lineChart(pts){
     <line class="cx" y1="${P.t-8}" y2="${H-P.b}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/><circle class="cd" r="4" fill="var(--accent)" stroke="var(--card)" stroke-width="2" visibility="hidden"/>
   </svg><div class="tip" hidden></div></div>`;
 }
+/* ---------- Kế hoạch thoát âm tài chính: lời khuyên tính từ số liệu đã ghi ---------- */
+function adviceHtml(f){
+  const T=today(),from=addDays(T,-30);
+  const cash=state.accounts.filter(a=>!isDebt(a)).reduce((s,a)=>s+bal(a.id),0);
+  const cards=state.accounts.filter(isDebt).map(a=>({a,v:Math.max(0,-bal(a.id)),rate:+a.rate||0})).filter(x=>x.v>0).sort((x,y)=>y.rate-x.rate||y.v-x.v);
+  const loans=state.loans.map(l=>({l,left:loanLeft(l)})).filter(x=>x.left>0);
+  const pdB=pdebtsOf().filter(p=>p.dir!=='lend'&&p.due&&pdLeft(p)>0).sort((a,b)=>a.due<b.due?-1:1);
+  const pdL=pdebtsOf().filter(p=>p.dir==='lend'&&pdLeft(p)>0);
+  const owe=cards.reduce((s,x)=>s+x.v,0)+loans.reduce((s,x)=>s+x.left*x.l.amount,0)+pdB.reduce((s,p)=>s+pdLeft(p),0);
+  const lendDue=pdL.filter(p=>p.due).reduce((s,p)=>s+pdLeft(p),0),net=cash+lendDue-owe;
+  /* Dòng tiền một tháng: thu cố định + thu ngoài trung bình − chi cố định − trả góp − chi sinh hoạt trung bình */
+  const recInc=state.recurring.filter(r=>r.type==='income').reduce((s,r)=>s+recAmount(r),0),vIncM=(f.vInc||0)*30;
+  const recExp=state.recurring.filter(r=>r.type==='expense').reduce((s,r)=>s+recAmount(r),0),loanM=loans.reduce((s,x)=>s+x.l.amount,0),vExpM=f.vExp*30;
+  const surplus=recInc+vIncM-recExp-loanM-vExpM,months=s=>net>=0?0:s>0?Math.ceil(-net/s):Infinity;
+  const mNow=months(surplus),mCut=months(surplus+vExpM*0.2),mInc=months(surplus+1e6);
+  const cardInt=cards.reduce((s,x)=>s+x.v*x.rate/100,0);
+  const byc={};state.tx.filter(t=>!t.ref&&isSpend(t)&&t.date>=from&&t.date<T).forEach(t=>byc[t.cat]=(byc[t.cat]||0)+t.amount);
+  const nd=Math.max(1,Math.min(30,daysBetween(state.startDate>from?state.startDate:from,T))),topC=Object.entries(byc).map(([c,v])=>[c,v/nd*30]).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const subs=state.recurring.filter(r=>r.type==='expense'&&r.cat==='Đăng ký số'),subsM=subs.reduce((s,r)=>s+recAmount(r),0);
+  const bigFix=state.recurring.filter(r=>r.type==='expense').map(r=>[r.name,recAmount(r)]).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const cardSpend=sum(state.tx.filter(t=>isSpend(t)&&t.date>=from&&isDebt(accById(t.acc))));
+  const jobM=sum(state.tx.filter(t=>t.type==='income'&&t.cat==='Job ngoài'&&t.date>=addDays(T,-90)))/3;
+  const mTxt=m=>m===Infinity?'chưa thoát được':m===0?'đã dương':m+' tháng';
+  const steps=[];
+  if(surplus<=0)steps.push(['⚠️ Chặn thâm hụt hằng tháng trước',`Mỗi tháng đang chi nhiều hơn thu khoảng <b class="out">${fmt(-surplus)}</b>. Cần cắt chi hoặc tăng thu ít nhất số này thì nợ mới bắt đầu giảm.`]);
+  if(cards.length)steps.push(['💳 Trả nợ lãi cao trước',`Dồn tiền dư trả theo thứ tự: ${cards.map(x=>`<b>${esc(x.a.name)}</b> ${fmtK(x.v)}${x.rate?` (lãi ${fmtDec(x.rate)}%/tháng)`:''}`).join(' → ')}. ${cardInt?`Nếu chỉ trả tối thiểu, mỗi tháng mất khoảng <b class="out">${fmt(Math.round(cardInt))}</b> tiền lãi. Trả đủ sao kê đúng hạn thì không mất khoản này.`:'Nhập lãi suất thẻ (nút ✏️ ở tab Tài khoản) để app tính được tiền lãi.'}`]);
+  if(cardSpend>0)steps.push(['✋ Tạm ngưng quẹt thẻ và mua trả sau',`30 ngày qua đã chi <b>${fmt(cardSpend)}</b> bằng thẻ tín dụng / trả sau. Chuyển sang trả bằng tiền mặt hoặc tài khoản để không phát sinh nợ mới.`]);
+  if(topC.length)steps.push(['✂️ Cắt chi sinh hoạt',`Nhiều nhất mỗi tháng: ${topC.map(([c,v])=>`${ICON[c]||'📦'} ${esc(c)} ~${fmtK(v)}`).join(', ')}. Giảm 20% chi sinh hoạt sẽ dư thêm khoảng <b class="in">${fmt(Math.round(vExpM*0.2))}</b>/tháng${net<0?`, thoát âm sau <b>${mTxt(mCut)}</b> thay vì ${mTxt(mNow)}`:''}.`]);
+  if(subsM||bigFix.length)steps.push(['🧾 Rà soát khoản cố định',`${subsM?`Các gói đăng ký (Google, Apple, A.I…) tốn <b>${fmt(subsM)}</b>/tháng, hủy gói ít dùng. `:''}${bigFix.length?`Khoản cố định lớn nhất: ${bigFix.map(([n,v])=>`${esc(n)} ${fmtK(v)}`).join(', ')}. Xem có khoản nào giảm được không.`:''}`]);
+  if(pdB.length)steps.push(['🤝 Nợ người quen',`${pdB.map(p=>`${esc(p.who)} ${fmtK(pdLeft(p))} hẹn ${dmy(p.due)}${p.due<T?' (<span class="late">quá hạn</span>)':''}`).join(', ')}. Nếu chưa đủ tiền, nói trước để xin giãn hạn thay vì vay chỗ khác bù vào.`]);
+  if(pdL.length)steps.push(['📥 Thu hồi tiền cho vay',`Người khác đang nợ bạn <b class="in">${fmt(pdL.reduce((s,p)=>s+pdLeft(p),0))}</b>. Nhắc thu về để giảm phần âm.`]);
+  steps.push(['💼 Tăng thu nhập',`${jobM?`Job ngoài 3 tháng qua trung bình ${fmt(Math.round(jobM))}/tháng. `:''}Mỗi <b>1 triệu</b> thu thêm mỗi tháng${net<0?` rút thời gian thoát âm xuống còn <b>${mTxt(mInc)}</b>`:' giúp tăng quỹ dự phòng nhanh hơn'}.`]);
+  steps.push(['🛟 Giữ một khoản đệm nhỏ',`Luôn để riêng khoảng <b>${fmt(Math.round(f.vExp*7/10000)*10000)}</b> (1 tuần chi sinh hoạt) để khỏi phải quẹt thẻ khi có việc gấp. Phần dư còn lại dồn trả nợ.`]);
+  return `<div class="card adv ${net<0?'neg':''}"><h3>🧭 ${net<0?'Kế hoạch thoát âm tài chính':'Giữ tài chính luôn dương'}</h3>
+    <div class="stats3" style="margin:6px 0 4px"><div><small>Tài sản ròng</small><b class="${net<0?'out':'in'}">${fmtK(net)}</b></div><div><small>Dư mỗi tháng</small><b class="${surplus<0?'out':'in'}">${fmtK(surplus)}</b></div><div><small>Thoát âm sau</small><b>${mTxt(mNow)}</b></div></div>
+    <p class="hint" style="margin:0 0 6px">Tài sản ròng = tiền đang có − nợ thẻ, trả sau, trả góp, vay người quen có hẹn ngày trả.</p>
+    <ol class="advl">${steps.map(([t,d])=>`<li><b>${t}</b><div>${d}</div></li>`).join('')}</ol>
+    <p class="hint">Tính từ số liệu bạn đã ghi, chỉ để tham khảo.</p></div>`;
+}
 function viewForecast(){
   const days=ui.fh||30,f=forecast(days),h=health(f),L=FH[days];
   const tips=[];
@@ -848,6 +889,7 @@ function viewForecast(){
     ${f.tot.loan?row('Trả góp',f.tot.loan,-1):''}
     ${row(`Sinh hoạt (~${fmtK(f.vExp)}/ngày)`,f.tot.vExp,-1)}
     <div class="kv"><span><b>Dự kiến còn</b></span><b>${fmt(f.liq)}</b></div></div>
+  ${adviceHtml(f)}
   ${tips.length?`<div class="card"><h3>💡 Gợi ý</h3>${tips.map(t=>`<p class="tipp">${t}</p>`).join('')}</div>`:''}
   <p class="hint">Dựa trên chi tiêu trung bình ${f.nd} ngày gần nhất (không tính khoản cố định) và các khoản hằng tháng đã cài. Ghi sổ càng đều, dự báo càng sát.</p>`;
 }
