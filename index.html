@@ -88,6 +88,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .wd.today{border-color:var(--accent);color:var(--accent)}
 .wd.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}.wd.on small{color:inherit;opacity:.85}.wd.on i.dot{background:var(--on-accent)}
 .wd:disabled{opacity:.35}
+.steps{margin:8px 0;padding-left:20px;font-size:14px}.steps li{margin:4px 0}
+button:disabled{opacity:.55}
 .mini{margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:12px;font-weight:600;color:var(--accent);background:var(--card)}
 .gear{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:7px 11px;font-weight:600;font-size:13.5px}
 .mrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}h3+.mrow,.hint+.mrow{border-top:0}
@@ -233,7 +235,110 @@ const fmt=n=>(n<0?'−':'')+fmtN(Math.abs(n))+'đ';
 function parseAmt(s){s=String(s||'').toLowerCase().replace(/\s|đ|vnd/g,'');if(!s)return 0;const m=s.match(/^([\d.,]+)(k|tr|m)?$/);if(!m)return 0;if(m[2]){const v=parseFloat(m[1].replace(',','.'));return Math.round(v*(m[2]==='k'?1e3:1e6))||0}return +m[1].replace(/[.,]/g,'')||0}
 
 function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):null}catch(e){return null}}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){toast('Không lưu được dữ liệu')}}
+/* Ghi nhận thay đổi để gộp dữ liệu giữa các máy:
+   - giao dịch sửa: t.mt = lúc sửa; giao dịch xóa: state.deleted[id] = lúc xóa
+   - tài khoản, khoản hằng tháng, mẫu ghi nhanh…: state.cfgAt = lúc sửa gần nhất */
+const CFG_KEYS=['setup','startDate','accounts','loans','recurring','quick','fuel','fuelDate','closed'];
+const cfgOf=s=>JSON.stringify(CFG_KEYS.map(k=>s[k]===undefined?null:s[k]));
+const snap=s=>s&&s.tx?{cfg:cfgOf(s),tx:new Map(s.tx.map(t=>[t.id,JSON.stringify(t)]))}:null;
+let base=null;
+function track(){
+  if(!state||!state.tx)return;if(!base){base=snap(state);return}
+  const now=Date.now(),ids=new Set();
+  if(cfgOf(state)!==base.cfg)state.cfgAt=now;
+  for(const t of state.tx){ids.add(t.id);const old=base.tx.get(t.id);if(old!==undefined&&old!==JSON.stringify(t))t.mt=now}
+  for(const id of base.tx.keys())if(!ids.has(id))(state.deleted=state.deleted||{})[id]=now;
+  base=snap(state);
+}
+function persist(silent){
+  if(silent)base=snap(state);else track();
+  try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){toast('Không lưu được dữ liệu')}
+  if(!silent&&typeof scheduleSync==='function')scheduleSync();
+}
+function mergeStates(a,b){
+  if(!a||!a.setup)return b&&b.setup?b:a;if(!b||!b.setup)return a;
+  const del=Object.assign({},b.deleted,a.deleted),map=new Map(),v=t=>t.mt||t.ts||0;
+  for(const t of b.tx.concat(a.tx)){if(del[t.id])continue;const o=map.get(t.id);if(!o||v(t)>v(o))map.set(t.id,t)}
+  const cfg=(a.cfgAt||0)>=(b.cfgAt||0)?a:b;
+  return Object.assign({},cfg,{tx:[...map.values()].sort((x,y)=>(x.ts||0)-(y.ts||0)),deleted:del});
+}
+
+/* ---------- Đồng bộ qua GitHub Gist bí mật, mã hóa AES-GCM trên máy ---------- */
+const SKEY='sothuchi_sync',GIST_DESC='SoThuChi - du lieu dong bo (da ma hoa)',GIST_FILE='sothuchi.enc.json';
+let sync=(()=>{try{return JSON.parse(localStorage.getItem(SKEY))||null}catch(e){return null}})(),syncing=false,syncAgain=false,syncTimer;
+function saveSync(){try{sync?localStorage.setItem(SKEY,JSON.stringify(sync)):localStorage.removeItem(SKEY)}catch(e){}}
+const toB64=buf=>{const u=new Uint8Array(buf);let s='';for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
+const fromB64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function deriveKey(pass,salt){
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function encryptState(obj,pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},await deriveKey(pass,salt),new TextEncoder().encode(JSON.stringify(obj)));
+  return JSON.stringify({app:'sothuchi',v:1,salt:toB64(salt),iv:toB64(iv),ct:toB64(ct)});
+}
+async function decryptState(txt,pass){
+  const p=JSON.parse(txt);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:fromB64(p.iv)},await deriveKey(pass,fromB64(p.salt)),fromB64(p.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function ghApi(path,opt){
+  opt=opt||{};const h={'Accept':'application/vnd.github+json','Authorization':'Bearer '+sync.token};if(opt.body)h['Content-Type']='application/json';
+  const r=await fetch('https://api.github.com'+path,Object.assign({},opt,{headers:h,cache:'no-store'}));
+  if(r.status===401)throw new Error('Mã truy cập GitHub sai hoặc đã hết hạn');
+  if(r.status===403||r.status===404)throw new Error('Mã truy cập chưa có quyền "gist" hoặc không tìm thấy dữ liệu');
+  if(!r.ok)throw new Error('GitHub báo lỗi '+r.status);
+  return r.json();
+}
+async function findGist(){
+  for(let p=1;p<=5;p++){const l=await ghApi('/gists?per_page=100&page='+p);const g=l.find(x=>x.description===GIST_DESC&&x.files&&x.files[GIST_FILE]);if(g)return g.id;if(l.length<100)break}
+  return null;
+}
+async function readRemote(){
+  const f=(await ghApi('/gists/'+sync.gistId)).files[GIST_FILE];if(!f)return null;
+  const txt=f.truncated?await (await fetch(f.raw_url,{cache:'no-store'})).text():f.content;
+  try{return await decryptState(txt,sync.pass)}catch(e){throw new Error('Sai mật khẩu mã hóa (phải giống máy đã tạo dữ liệu)')}
+}
+async function writeRemote(obj){
+  const content=await encryptState(obj,sync.pass);
+  if(sync.gistId)await ghApi('/gists/'+sync.gistId,{method:'PATCH',body:JSON.stringify({files:{[GIST_FILE]:{content}}})});
+  else sync.gistId=(await ghApi('/gists',{method:'POST',body:JSON.stringify({description:GIST_DESC,public:false,files:{[GIST_FILE]:{content}}})})).id;
+}
+function scheduleSync(ms){if(!sync)return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow(),ms==null?2500:ms)}
+async function syncNow(manual){
+  if(!sync)return;if(!navigator.onLine){if(manual)toast('Đang mất mạng, sẽ đồng bộ khi có mạng');return}
+  if(syncing){syncAgain=true;return}
+  syncing=true;sync.err='';if(ui.view==='settings'||ui.showSync)render();
+  try{
+    if(!sync.gistId)sync.gistId=await findGist();
+    const remote=sync.gistId?await readRemote():null,merged=mergeStates(state,remote);
+    if(!merged){if(manual)toast('Chưa có dữ liệu nào để đồng bộ')}
+    else{
+      const mj=JSON.stringify(merged);
+      if(!remote||JSON.stringify(remote)!==mj)await writeRemote(merged);
+      if(JSON.stringify(state)!==mj){state=merged;persist(true);if(ui.view==='setup'){ui.view='today';ui.draft=null;ui.showSync=false}render();toast('Đã cập nhật dữ liệu từ máy khác')}
+      else if(manual)toast('Đã đồng bộ');
+    }
+    sync.last=Date.now();
+  }catch(e){sync.err=e.message||'Không đồng bộ được';if(manual||!sync.last)toast(sync.err)}
+  syncing=false;saveSync();if(ui.view==='settings'||ui.showSync)render();
+  if(syncAgain){syncAgain=false;scheduleSync(500)}
+}
+const hhmm=t=>String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+function syncHtml(){
+  if(!sync)return `<div class="card"><p style="margin:0">Dữ liệu được <b>mã hóa ngay trên máy</b> rồi mới cất vào một <b>Gist bí mật</b> trong tài khoản GitHub của bạn. GitHub chỉ thấy chuỗi ký tự đã mã hóa.</p>
+    <ol class="steps"><li>Tạo mã truy cập GitHub: <a href="https://github.com/settings/tokens/new?scopes=gist&description=SoThuChi%20dong%20bo" target="_blank" rel="noopener" style="color:var(--accent)">mở trang tạo mã ↗</a>. Chỉ tick ô <b>gist</b>, chọn thời hạn, bấm <b>Generate token</b> rồi sao chép mã.</li>
+    <li>Dán mã vào ô dưới và đặt <b>mật khẩu mã hóa</b>. Trên mọi máy dùng <b>cùng một mật khẩu</b>.</li></ol>
+    <label>Mã truy cập GitHub<input id="syTok" type="password" autocomplete="off" placeholder="ghp_…"></label>
+    <label>Mật khẩu mã hóa<input id="syPass" type="password" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự"></label>
+    <p class="hint late">Quên mật khẩu mã hóa thì không ai mở được dữ liệu trên GitHub, kể cả bạn. Hãy ghi lại cẩn thận.</p>
+    <div class="btnrow"><button class="primary" data-act="connectSync" ${syncing?'disabled':''}>${syncing?'Đang kết nối…':'Kết nối & đồng bộ'}</button></div></div>`;
+  const t=sync.last?new Date(sync.last):null;
+  return `<div class="card"><div>${syncing?'⏳ Đang đồng bộ…':sync.err?`<span class="late">⚠️ ${esc(sync.err)}</span>`:t?`✅ Đã đồng bộ lúc <b>${hhmm(t)}</b> ngày ${dmy(ymd(t))}`:'Chưa đồng bộ lần nào'}</div>
+    <p class="hint">Tự đồng bộ khi mở app và vài giây sau mỗi lần bạn ghi sổ, khi có mạng. Mã truy cập và mật khẩu chỉ lưu trên máy này, không nằm trong file sao lưu.</p>
+    <div class="btnrow"><button class="outline" data-act="disconnectSync" style="flex:0 0 auto">Ngắt kết nối</button><button class="primary" data-act="syncBtn" ${syncing?'disabled':''}>☁️ Đồng bộ ngay</button></div></div>`;
+}
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1800)}
 
 /* ---------- Giao diện ---------- */
@@ -270,6 +375,7 @@ function themeHtml(){const t=THEMES[theme.p];
 
 let state=load();
 if(state&&state.tx){const fixCat=o=>{if(o.cat==='Hóa đơn')o.cat='Điện nước'};state.tx.forEach(fixCat);(state.recurring||[]).forEach(fixCat)}
+base=snap(state);
 let ui={view:state&&state.setup?'today':'setup',date:today(),type:'expense',cat:EXP_CATS[0],acc:null,toAcc:null,editing:null,recon:false,month:today().slice(0,7),draft:null,amtVal:'',noteVal:'',sugs:[],dueMap:{}};
 
 const accById=id=>state.accounts.find(a=>a.id===id);
@@ -543,6 +649,7 @@ function viewSettings(){
   let lb=null;try{lb=localStorage.getItem('sothuchi_lastbackup')}catch(e){}
   const ago=lb?daysBetween(lb,today()):null;
   return `<div class="head"><button class="nav" data-act="tab" data-view="accounts" aria-label="Quay lại">‹</button><div class="mid"><b>Cài đặt</b></div><span style="width:40px"></span></div>
+  <div class="sect">☁️ ĐỒNG BỘ GIỮA CÁC MÁY</div>${syncHtml()}
   ${themeHtml()}
   <div class="sect">💾 SAO LƯU & KHÔI PHỤC</div><div class="card">
     <div>${lb?`Lần sao lưu gần nhất: <b>${dmy(lb)}</b>${ago>7?` <span class="late">(${ago} ngày trước)</span>`:''}`:'<span class="late">Chưa sao lưu lần nào.</span>'}</div>
@@ -621,7 +728,8 @@ function viewSetup(){
     <div class="grid2">${f('recurring',i,'name',r.name,'Tên')}${f('recurring',i,'amount',r.amount?fmtN(r.amount):'','Số tiền','money')}</div>
     <div class="grid2"><label>Ngày${f('recurring',i,'day',r.day,'1-31','num')}</label><label>${type==='income'?'Nhận vào':'Trả từ'}<select data-sec="recurring" data-i="${i}" data-f="acc">${ao(r.acc)}</select></label></div>${x('recurring',i)}</div>`).join('');
   return `<h1>${edit?'Sửa thiết lập':'Bắt đầu'}</h1><p class="muted" style="margin:0">${edit?'Sửa xong bấm Lưu ở cuối trang.':'Điền số dư hiện tại (xem trong MISA). Ô nào chưa rõ cứ để trống, sửa sau được.'}</p>
-  ${!edit?`<button class="ghost" data-act="sample">Chỉ xem thử? Dùng dữ liệu mẫu</button>`:''}
+  ${!edit?`<button class="ghost" data-act="showSync">☁️ Đã dùng trên máy khác? Lấy dữ liệu về</button>${ui.showSync?syncHtml():''}
+  <button class="ghost" data-act="sample">Chỉ xem thử? Dùng dữ liệu mẫu</button>`:''}
   <div class="sect">TÀI KHOẢN & SỐ DƯ</div><section class="card">
   ${d.accounts.map((a,i)=>`<div class="row-edit">
     ${a.type!=='cash'?`<div class="brandrow"><div class="aic">${accIcon(a)}</div><select data-sec="accounts" data-i="${i}" data-f="brand"><option value="">${a.type==='wallet'?'— Chọn ví điện tử —':a.type==='paylater'?'— Chọn dịch vụ trả sau —':'— Chọn ngân hàng —'}</option>
@@ -768,7 +876,15 @@ const ACT={
   export(){const b=new Blob([JSON.stringify(Object.assign({},state,{theme}))],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='so-thu-chi-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
     try{localStorage.setItem('sothuchi_lastbackup',today())}catch(e){}render();toast('Đã tạo file sao lưu')},
   import(){$('#imp').click()},
-  reset(){if(!confirm('Xóa TOÀN BỘ dữ liệu? Không thể hoàn tác.'))return;try{localStorage.removeItem(KEY)}catch(e){}state=null;ui.draft=null;ui.view='setup';render();scrollTo(0,0)}
+  reset(){if(!confirm(sync?'Xóa toàn bộ dữ liệu TRÊN MÁY NÀY và ngắt đồng bộ? Dữ liệu trên GitHub vẫn còn, lấy lại được bằng "Lấy dữ liệu về".':'Xóa TOÀN BỘ dữ liệu? Không thể hoàn tác.'))return;
+    try{localStorage.removeItem(KEY)}catch(e){}sync=null;saveSync();state=null;base=null;ui.draft=null;ui.view='setup';render();scrollTo(0,0)},
+  showSync(){ui.showSync=!ui.showSync;render()},
+  async connectSync(){const token=$('#syTok').value.trim(),pass=$('#syPass').value;
+    if(!token||pass.length<6){toast('Nhập mã truy cập và mật khẩu (tối thiểu 6 ký tự)');return}
+    sync={token,pass,gistId:null,last:0};saveSync();await syncNow(true);
+    if(sync&&!sync.last){sync=null;saveSync();render()}},
+  disconnectSync(){if(!confirm('Ngắt đồng bộ trên máy này? Dữ liệu trên máy và trên GitHub vẫn giữ nguyên.'))return;sync=null;saveSync();render()},
+  syncBtn(){syncNow(true)}
 };
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&ACT[el.dataset.act]){if(el.dataset.act==='del')e.stopPropagation();ACT[el.dataset.act](el,e)}});
 document.addEventListener('input',e=>{const el=e.target;if(el.classList.contains('money')&&/^[\d.]*$/.test(el.value)){const d=el.value.replace(/\./g,'');el.value=d?fmtN(+d):''}});
@@ -805,6 +921,10 @@ if('serviceWorker' in navigator&&location.protocol!=='file:')addEventListener('l
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='amt'||e.target.id==='note')){e.preventDefault();ACT.save()}});
 render();
+/* Đồng bộ khi mở app, khi quay lại app và khi có mạng trở lại */
+if(sync)scheduleSync(300);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleSync(300)});
+addEventListener('online',()=>scheduleSync(300));
 </script>
 </body>
 </html>
