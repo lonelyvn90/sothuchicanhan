@@ -91,6 +91,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 @keyframes inL{from{transform:translateX(36px);opacity:.3}to{transform:none;opacity:1}}
 @keyframes inR{from{transform:translateX(-36px);opacity:.3}to{transform:none;opacity:1}}
 #app.sl{animation:inL .22s ease-out}#app.sr{animation:inR .22s ease-out}
+/* Không để trang tràn ngang khi đang vuốt (tránh thanh tab bị đẩy mất) */
+html,body{overflow-x:clip;max-width:100%}#app{will-change:transform;backface-visibility:hidden}
+@supports not (overflow-x:clip){html,body{overflow-x:hidden}}
 @media (prefers-reduced-motion:reduce){#app.sl,#app.sr{animation:none}}
 .icbtns{display:flex;gap:8px}
 .icbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:18px;display:grid;place-items:center}
@@ -1337,18 +1340,35 @@ function goTab(v,dir){
   ui.view=v;ui.editing=null;if(v==='month')ui.month=today().slice(0,7);render();scrollTo(0,0);
   if(dir){const a=$('#app');a.classList.remove('sl','sr');void a.offsetWidth;a.classList.add(dir>0?'sl':'sr')}
 }
-/* Vuốt trái/phải để đổi tab (bỏ qua khi vuốt trên ô nhập, biểu đồ) */
+/* Vuốt trái/phải để đổi tab: trang chạy theo ngón tay, buông ra thì trượt hẳn sang tab bên cạnh
+   (bỏ qua khi vuốt trên ô nhập, biểu đồ, tay nắm kéo thả) */
 let sw0=null;
+const tabOrder=()=>[...document.querySelectorAll('#tabs button')].map(b=>b.dataset.view);
+const slideTo=(el,x,ms)=>{el.style.transition=ms?`transform ${ms}ms cubic-bezier(.2,.7,.3,1)`:'none';el.style.transform=x?`translate3d(${x}px,0,0)`:'translate3d(0,0,0)'};
 document.addEventListener('touchstart',e=>{
-  if(e.touches.length!==1||$('#tabs').hidden||ui.accEdit||e.target.closest('input,select,textarea,.fc,.chart,.themes,.dhandle')){sw0=null;return}
-  const p=e.touches[0];sw0={x:p.clientX,y:p.clientY,t:Date.now()};
+  if(e.touches.length!==1||$('#tabs').hidden||ui.accEdit||sw0&&sw0.busy||e.target.closest('input,select,textarea,.fc,.chart,.themes,.dhandle,.sugs,.snav,.bbbrands')){sw0=null;return}
+  const p=e.touches[0],order=tabOrder(),i=order.indexOf(ui.view==='settings'?'accounts':ui.view);
+  sw0={x:p.clientX,y:p.clientY,t:Date.now(),lock:null,dx:0,order,i};
 },{passive:true});
-document.addEventListener('touchend',e=>{
-  if(!sw0)return;const p=e.changedTouches[0],dx=p.clientX-sw0.x,dy=p.clientY-sw0.y,dt=Date.now()-sw0.t;sw0=null;
-  if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.8||dt>800)return;
-  const order=[...document.querySelectorAll('#tabs button')].map(b=>b.dataset.view),i=order.indexOf(ui.view==='settings'?'accounts':ui.view),j=i+(dx<0?1:-1);
-  if(i>=0&&j>=0&&j<order.length)goTab(order[j],dx<0?1:-1);
-},{passive:true});
+document.addEventListener('touchmove',e=>{
+  if(!sw0||sw0.busy)return;const p=e.touches[0],dx=p.clientX-sw0.x,dy=p.clientY-sw0.y;
+  if(!sw0.lock){if(Math.abs(dx)<8&&Math.abs(dy)<8)return;sw0.lock=Math.abs(dx)>Math.abs(dy)*1.2?'h':'v'}
+  if(sw0.lock!=='h')return;
+  e.preventDefault();
+  const j=sw0.i+(dx<0?1:-1),edge=sw0.i<0||j<0||j>=sw0.order.length;
+  sw0.dx=edge?dx*0.25:dx;slideTo($('#app'),sw0.dx,0);
+},{passive:false});
+function endSwipe(){
+  if(!sw0||sw0.busy)return;const s=sw0;if(s.lock!=='h'){sw0=null;return}
+  const app=$('#app'),W=innerWidth,dx=s.dx,dt=Date.now()-s.t,j=s.i+(dx<0?1:-1);
+  const go=s.i>=0&&j>=0&&j<s.order.length&&(Math.abs(dx)>W*0.22||(Math.abs(dx)>40&&dt<280));
+  if(!go){slideTo(app,0,200);setTimeout(()=>{app.style.transition='';app.style.transform=''},220);sw0=null;return}
+  s.busy=true;const dir=dx<0?-1:1;
+  slideTo(app,dir*W,160);
+  setTimeout(()=>{goTab(s.order[j]);slideTo(app,-dir*W*0.6,0);void app.offsetWidth;
+    slideTo(app,0,220);setTimeout(()=>{app.style.transition='';app.style.transform='';sw0=null},240)},160);
+}
+document.addEventListener('touchend',endSwipe,{passive:true});document.addEventListener('touchcancel',endSwipe,{passive:true});
 document.addEventListener('pointermove',fcHover);document.addEventListener('pointerdown',fcHover);
 document.addEventListener('pointerout',e=>{const svg=e.target.closest&&e.target.closest('.fc svg');if(svg&&!svg.contains(e.relatedTarget)){svg.querySelectorAll('.cx,.cd').forEach(n=>n.setAttribute('visibility','hidden'));svg.parentNode.querySelector('.tip').hidden=true}});
 /* Cài như app: chạy offline + xin trình duyệt giữ dữ liệu lâu dài */
