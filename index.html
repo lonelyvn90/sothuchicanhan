@@ -108,6 +108,15 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .eform .msave{background:var(--mc);color:#fff}
 .tgroup{border-left:4px solid var(--line)}.g-expense{border-left-color:var(--red)}.g-income{border-left-color:var(--green)}.g-other{border-left-color:#3b82f6}
 .tgroup h3{margin:0}
+.frow{border-top:1px solid var(--line);padding:9px 0}.frow:first-of-type{border-top:0}
+.fhead{display:flex;align-items:baseline;gap:6px;margin-bottom:6px}.fhead span{font-size:18px}.fhead small{margin-left:auto;font-size:11.5px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fcell{border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:var(--bg)}
+.fcell.cheap{border-color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--bg))}
+.fst{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--muted)}
+.fst a{color:var(--accent);text-decoration:none;font-size:15px;padding:0 4px}
+.fcell input{width:100%;text-align:right;padding:5px 6px;margin:3px 0 2px;font-size:15px;background:var(--card)}
+.fcell small{font-size:11px;display:block;text-align:right}
 .dbox{margin-top:7px;background:var(--bg);border-radius:10px;padding:7px 9px;font-size:12.5px}
 .stline{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;font-size:12.5px;color:var(--text)}
 .stline input{width:128px;flex:none;text-align:right;padding:6px 8px;font-size:15px;margin:0;background:var(--card)}
@@ -749,8 +758,12 @@ const COINS=[['bitcoin','Bitcoin','BTC'],['ethereum','Ethereum','ETH'],['tether'
 const FX=[['USD','Đô la Mỹ','🇺🇸',1],['EUR','Euro','🇪🇺',1],['GBP','Bảng Anh','🇬🇧',1],['JPY','Yên Nhật','🇯🇵',100],['CNY','Nhân dân tệ','🇨🇳',1],['KRW','Won Hàn','🇰🇷',1000],['SGD','Đô Singapore','🇸🇬',1],['THB','Baht Thái','🇹🇭',1]];
 const GOLDS=[['SJL1L10','Vàng miếng SJC'],['SJ9999','Nhẫn SJC 9999'],['DOHNL','DOJI Hà Nội'],['PQHNVM','PNJ Hà Nội'],['BTSJC','Bảo Tín SJC']];
 const FUELS=[['ron95','Xăng E10 RON 95-III'],['ron92','Xăng E5 RON 92-II'],['do','Dầu DO 0,05S-II'],['dauhoa','Dầu hỏa 2-K']];
-const FOODS=[['gao','Gạo','kg','🍚'],['heo','Thịt heo (ba chỉ)','kg','🥓'],['bo','Thịt bò','kg','🥩'],['ga','Thịt gà','kg','🍗'],['ca','Cá','kg','🐟'],['tom','Tôm','kg','🦐'],
-  ['trung','Trứng gà','chục','🥚'],['rau','Rau xanh','kg','🥬'],['traicay','Trái cây','kg','🍊'],['dauan','Dầu ăn','lít','🫒'],['duong','Đường','kg','🧂'],['sua','Sữa bột cho bé','hộp','🍼'],['mi','Mì gói','thùng','🍜'],['gas','Gas nấu ăn','bình 12kg','🔥']];
+/* [mã, tên, đơn vị, icon, từ khóa tìm trên trang siêu thị] */
+const FOODS=[['gao','Gạo','kg','🍚','gạo'],['heo','Thịt heo (ba rọi)','kg','🥓','ba rọi heo'],['bo','Thịt bò','kg','🥩','thịt bò'],['ga','Thịt gà','kg','🍗','thịt gà'],['ca','Cá','kg','🐟','cá'],['tom','Tôm','kg','🦐','tôm'],
+  ['trung','Trứng gà','hộp 10 quả','🥚','trứng gà'],['rau','Rau xanh','kg','🥬','rau'],['traicay','Trái cây','kg','🍊','trái cây'],['dauan','Dầu ăn','chai 1 lít','🫒','dầu ăn'],['duong','Đường','kg','🧂','đường'],['sua','Sữa bột cho bé','hộp','🍼','sữa bột'],['mi','Mì gói','thùng','🍜','thùng mì']];
+const STORES=[['bhx','Bách Hóa Xanh','BHX',q=>'https://www.bachhoaxanh.com/tim-kiem?key='+encodeURIComponent(q)],['coop','Co.op Mart','Co.op',q=>'https://cooponline.vn/search?router=productListing&query='+encodeURIComponent(q)]];
+/* Dữ liệu cũ (một giá chung) được coi là giá Bách Hóa Xanh */
+function foodOf(k){const f=(state.food||{})[k]||{};if(f.p&&!f.bhx)return {bhx:{p:f.p,prev:f.prev,d:f.d}};return f}
 const fmtTr=n=>(n/1e6).toLocaleString('vi-VN',{maximumFractionDigits:2})+' tr';
 const fmtBig=n=>n>=1e9?(n/1e9).toLocaleString('vi-VN',{maximumFractionDigits:2})+' tỷ':n>=1e6?fmtTr(n):fmt(n);
 async function loadMarket(force){
@@ -788,9 +801,14 @@ function viewMarket(){
   ${card('💵 Tỷ giá ngoại tệ',fx,err.fx,'Tỷ giá thị trường quốc tế, có thể chênh vài trăm đồng so với giá mua bán ở ngân hàng.')}
   ${card('₿ Tiền số',coins,err.coins,'▲▼ thay đổi trong 24 giờ.')}
   <div class="card"><h3>⛽ Xăng dầu</h3>${fuel}<p class="hint">Giá xăng dầu chưa có nguồn tự cập nhật, bạn nhập theo bảng giá Petrolimex mỗi kỳ điều chỉnh (thường thứ Năm hằng tuần)${state.fuelDate?`. Lần nhập gần nhất: <b id="fuelDate">${dmy(state.fuelDate)}</b>`:''}. <a href="https://www.petrolimex.com.vn/" target="_blank" rel="noopener" style="color:var(--accent)">Xem giá Petrolimex ↗</a></p></div>
-  <div class="card"><h3>🛒 Thực phẩm tiêu dùng</h3>${FOODS.map(([k,l,u,ic])=>{const f=(state.food||{})[k]||{};const ch=f.p&&f.prev?Math.round((f.p-f.prev)/f.prev*100):null;
-    return `<div class="mrow"><div class="mic">${ic}</div><div class="bd"><b>${l}</b><small class="muted">đồng / ${u}${f.d?` · ${dm(f.d)}`:''}${ch?` <span class="${ch>0?'out':'in'}">${ch>0?'▲':'▼'}${Math.abs(ch)}%</span>`:''}</small></div><input class="money fuelIn" inputmode="numeric" data-food="${k}" value="${f.p?fmtN(f.p):''}" placeholder="Nhập giá"></div>`}).join('')}
-    <p class="hint">Nhập giá bạn mua ở chợ hoặc siêu thị. Mỗi lần nhập giá mới, app so với lần trước: ▲ đỏ là tăng giá, ▼ xanh là giảm giá.</p></div>
+  <div class="card"><h3>🛒 Thực phẩm: Bách Hóa Xanh & Co.op Mart</h3>
+    <p class="hint" style="margin:0 0 4px">Bấm <b>↗</b> để mở trang tìm kiếm của siêu thị, xem giá rồi nhập vào ô. Nơi nào rẻ hơn được tô xanh.</p>
+    ${FOODS.map(([k,l,u,ic,q])=>{const f=foodOf(k),pb=(f.bhx||{}).p,pc=(f.coop||{}).p,cheap=pb&&pc&&pb!==pc?(pb<pc?'bhx':'coop'):'';
+    return `<div class="frow"><div class="fhead"><span>${ic}</span><b>${l}</b><small class="muted">đồng / ${u}</small></div><div class="fgrid">${STORES.map(([s,sn,sh,url])=>{const e=f[s]||{},ch=e.p&&e.prev?Math.round((e.p-e.prev)/e.prev*100):null;
+      return `<div class="fcell ${cheap===s?'cheap':''}"><div class="fst"><span>${sh}</span><a href="${url(q)}" target="_blank" rel="noopener" aria-label="Tìm ${esc(l)} trên ${sn}">↗</a></div>
+        <input class="money" inputmode="numeric" data-food="${k}" data-store="${s}" value="${e.p?fmtN(e.p):''}" placeholder="Giá" aria-label="Giá ${esc(l)} ở ${sn}">
+        <small class="muted">${e.d?dm(e.d):'&nbsp;'}${ch?` <span class="${ch>0?'out':'in'}">${ch>0?'▲':'▼'}${Math.abs(ch)}%</span>`:''}${cheap===s?' · rẻ hơn':''}</small></div>`}).join('')}</div></div>`}).join('')}
+    <p class="hint">▲ đỏ: tăng giá, ▼ xanh: giảm giá so với lần nhập trước ở cùng siêu thị. Giá siêu thị chưa lấy tự động được vì trang của họ chỉ hiện giá trong ứng dụng riêng.</p></div>
   <p class="hint">Nguồn: vang.today, gold-api.com, open.er-api.com, CoinGecko. Chỉ để tham khảo.</p>`;
 }
 
@@ -993,8 +1011,9 @@ document.addEventListener('change',e=>{
   if(el.id==='toSel'){ui.toAcc=el.value;return}
   if(el.dataset.st){const a=accById(el.dataset.st);if(!a)return;const mk=today().slice(0,7),v=parseAmt(el.value);a.stmt=Object.assign({},a.stmt);
     if(v)a.stmt[mk]=v;else delete a.stmt[mk];persist();render();toast(v?'Đã lưu số phải thanh toán tháng này':'Đã xóa số sao kê');return}
-  if(el.dataset.food){state.food=state.food||{};const k=el.dataset.food,o=state.food[k]||{},v=parseAmt(el.value);
-    state.food[k]=v?{p:v,prev:o.p&&o.p!==v?o.p:o.prev||0,d:today()}:{};persist();render();toast(v?'Đã lưu giá':'Đã xóa giá');return}
+  if(el.dataset.food){state.food=state.food||{};const k=el.dataset.food,s=el.dataset.store||'bhx',f=foodOf(k),o=f[s]||{},v=parseAmt(el.value);
+    const n={bhx:f.bhx,coop:f.coop};n[s]=v?{p:v,prev:o.p&&o.p!==v?o.p:o.prev||0,d:today()}:undefined;state.food[k]=JSON.parse(JSON.stringify(n));
+    persist();render();toast(v?'Đã lưu giá':'Đã xóa giá');return}
   if(el.dataset.fuel){state.fuel=state.fuel||{};const v=parseAmt(el.value);state.fuel[el.dataset.fuel]=v;el.value=v?fmtN(v):'';state.fuelDate=today();persist();const d=$('#fuelDate');if(d)d.textContent=dmy(today());toast('Đã lưu giá');return}
   if(el.id==='fxCur'){ACT.fxCur(el);return}
   if(el.id==='fxName'){if(ui.fix&&!ui.fix.id&&ui.fix.type==='expense')$('#fxCat').value=CAT_GUESS(el.value);return}
