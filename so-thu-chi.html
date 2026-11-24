@@ -94,6 +94,20 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 @media (prefers-reduced-motion:reduce){#app.sl,#app.sr{animation:none}}
 .icbtns{display:flex;gap:8px}
 .icbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:18px;display:grid;place-items:center}
+/* Form ghi sổ: mỗi loại một màu riêng */
+.m-expense{--mc:var(--red)}.m-income{--mc:var(--green)}.m-transfer{--mc:#3b82f6}
+.mseg{margin-top:12px}.mseg button.on{background:var(--mc);color:#fff;box-shadow:none}
+.eform{border:2px solid var(--mc);border-top-width:6px;margin-top:8px}
+.ftitle{font-weight:800;font-size:16px;color:var(--mc);margin-bottom:4px}
+.fsec{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.ftitle+.fsec{border-top:0;margin-top:2px;padding-top:2px}
+.flabel{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.fsec label{margin-top:0}.fsec .grid2 label{margin-top:0}
+.eform .amt{margin:2px 0 0}.eform .amt .sign{font-size:30px;font-weight:800;color:var(--mc);min-width:14px}
+.eform .amt input{color:var(--mc);border-bottom-color:var(--mc)}
+.eform .chip.on{background:color-mix(in srgb,var(--mc) 14%,var(--card));border-color:var(--mc);color:var(--mc)}
+.eform .msave{background:var(--mc);color:#fff}
+.tgroup{border-left:4px solid var(--line)}.g-expense{border-left-color:var(--red)}.g-income{border-left-color:var(--green)}.g-other{border-left-color:#3b82f6}
+.tgroup h3{margin:0}
 .dbox{margin-top:7px;background:var(--bg);border-radius:10px;padding:7px 9px;font-size:12.5px}
 .stline{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;font-size:12.5px;color:var(--text)}
 .stline input{width:128px;flex:none;text-align:right;padding:6px 8px;font-size:15px;margin:0;background:var(--card)}
@@ -481,18 +495,26 @@ function viewToday(){
     <button class="nav" data-act="day" data-d="1" ${D>=T?'disabled':''} aria-label="Ngày sau">›</button></div>
   ${due.length?`<div class="card warn"><h3>⏰ Đến hạn</h3>${due.map(it=>`<div class="due"><div class="bd"><b>${esc(it.name)}</b><small>${it.date<D?`<span class="late">Trễ từ ${dm(it.date)}</span> · `:''}${esc(accName(it.acc))}${it.usd?`<br>💵 ${it.usdNote}`:''}</small></div><input class="money" inputmode="numeric" data-due="${it.key}" value="${fmtN(it.amount)}"><button data-act="payDue" data-key="${it.key}">${it.type==='income'?'Đã nhận':'Đã trả'}</button></div>`).join('')}</div>`:''}
   ${quickHtml()}
-  <div class="card">
-    <div class="seg">${[['expense','Chi'],['income','Thu'],['transfer','Chuyển']].map(([v,l])=>`<button class="${ui.type===v?'on':''}" data-act="type" data-v="${v}">${l}</button>`).join('')}</div>
-    <div class="amt"><input id="amt" class="money" inputmode="numeric" placeholder="0" autocomplete="off" aria-label="Số tiền"><span>đ</span></div>
-    ${ui.type!=='transfer'?chipsHtml():''}
+  ${(()=>{const M={expense:['Chi','💸','Khoản chi','−','Thêm khoản chi'],income:['Thu','💰','Khoản thu','+','Thêm khoản thu'],transfer:['Chuyển','🔁','Chuyển tiền giữa tài khoản','','Ghi chuyển tiền']}[ui.type];
+  return `<div class="seg mseg">${[['expense','💸 Chi'],['income','💰 Thu'],['transfer','🔁 Chuyển']].map(([v,l])=>`<button class="m-${v} ${ui.type===v?'on':''}" data-act="type" data-v="${v}">${l}</button>`).join('')}</div>
+  <div class="card eform m-${ui.type}">
+    <div class="ftitle">${M[1]} ${ui.editing?'Sửa '+M[2].toLowerCase():M[2]}</div>
+    <div class="fsec"><div class="flabel">Số tiền</div>
+      <div class="amt"><span class="sign">${M[3]}</span><input id="amt" class="money" inputmode="numeric" placeholder="0" autocomplete="off" aria-label="Số tiền"><span>đ</span></div></div>
+    ${ui.type!=='transfer'?`<div class="fsec"><div class="flabel">Danh mục</div>${chipsHtml()}</div>`:''}
+    <div class="fsec"><div class="flabel">Tài khoản</div>
     ${ui.type==='transfer'?`<div class="grid2"><label>Từ<select id="accSel">${accOptions(ui.acc)}</select></label><label>Đến<select id="toSel">${accOptions(ui.toAcc,ui.acc)}</select></label></div>`
       :`<label>${ui.type==='income'?'Nhận vào':'Trả bằng'}<select id="accSel">${accOptions(ui.acc)}</select></label>`}
-    ${(()=>{const a=accById(ui.acc);if(!isDebt(a)||!a.limit)return '';const left=a.limit+bal(a.id);return `<p class="hint" style="margin-top:4px">Còn hạn mức <b class="${left<a.limit*0.2?'late':''}">${fmt(left)}</b> / ${fmt(a.limit)}</p>`})()}
-    <label>Ghi chú<input id="note" placeholder="Không bắt buộc" autocomplete="off"></label>
-    <div class="btnrow">${ui.editing?`<button class="outline" data-act="cancelEdit" style="flex:0 0 90px">Hủy</button><button class="primary" data-act="save">Cập nhật</button>`:`<button class="primary" data-act="save">Thêm</button>`}</div>
+    ${(()=>{const a=accById(ui.acc);if(ui.type==='transfer'||!isDebt(a)||!a.limit)return '';const left=a.limit+bal(a.id);return `<p class="hint" style="margin-top:4px">Còn hạn mức <b class="${left<a.limit*0.2?'late':''}">${fmt(left)}</b> / ${fmt(a.limit)}</p>`})()}</div>
+    <div class="fsec"><div class="flabel">Ghi chú</div><input id="note" placeholder="Không bắt buộc" autocomplete="off" aria-label="Ghi chú"></div>
+    <div class="btnrow">${ui.editing?`<button class="outline" data-act="cancelEdit" style="flex:0 0 90px">Hủy</button><button class="primary msave" data-act="save">Cập nhật</button>`:`<button class="primary msave" data-act="save">＋ ${M[4]}</button>`}</div>
     ${!ui.editing?`<button class="link" data-act="saveQuick" style="padding-bottom:0">☆ Lưu thành mẫu ghi nhanh</button>`:''}
-  </div>
-  <div class="card">${txs.length?`<ul class="list">${txs.map(txRow).join('')}</ul>`:`<div class="empty">Chưa ghi gì trong ngày này.</div>`}</div>
+  </div>`})()}
+  ${(()=>{if(!txs.length)return `<div class="card"><div class="empty">Chưa ghi gì trong ngày này.</div></div>`;
+    const G=[['expense','💸 Khoản chi','out','−'],['income','💰 Khoản thu','in','+'],['other','🔁 Chuyển tiền & điều chỉnh','mv','']];
+    return G.map(([k,t,c,s])=>{const l=txs.filter(x=>k==='other'?(x.type==='transfer'||x.type==='adjust'):x.type===k);if(!l.length)return '';
+      const tot=k==='other'?0:sum(k==='expense'?l.filter(isSpend):l);
+      return `<div class="card tgroup g-${k}"><div class="ch"><h3>${t} <small class="muted">(${l.length})</small></h3>${k!=='other'?`<b class="${c}">${s}${fmt(tot)}</b>`:''}</div><ul class="list">${l.map(txRow).join('')}</ul></div>`}).join('')})()}
   ${ui.recon?`<div class="card recon"><h3>Đối chiếu số dư</h3><p class="hint" style="margin:0 0 6px">Nhập số dư thật nếu khác với sổ. Để trống nếu đã khớp.</p>
       ${state.accounts.map(a=>{const b=bal(a.id,D);return `<div class="rw"><div><b>${esc(a.name)}</b><small>Sổ: ${isDebt(a)?'nợ '+fmt(Math.max(0,-b)):fmt(b)}</small></div><input class="money recIn" inputmode="numeric" data-id="${a.id}" placeholder="${isDebt(a)?'Nợ thật':'Số dư thật'}"></div>`}).join('')}
       <div class="btnrow"><button class="outline" data-act="recon">Đóng</button><button class="primary" data-act="applyRecon">Cập nhật số dư</button></div></div>`
