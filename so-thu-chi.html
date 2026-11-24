@@ -594,6 +594,7 @@ function viewAccounts(){
       return {ic:accIcon(a),name:a.name,lim:a.limit||0,v,
       sub:[ACC_TYPES[a.type],a.limit?`còn hạn mức <b class="${a.limit-v<a.limit*0.2?'late':''}">${fmtK(a.limit-v)}</b>/${fmtK(a.limit)}`:'',a.rate?`lãi ${String(a.rate).replace('.',',')}%/tháng`:''].filter(Boolean).join(' · '),
       extra:`<div class="dbox"><label class="stline"><span>🧾 Sao kê tháng ${+mk.slice(5)} phải thanh toán</span><input class="money" inputmode="numeric" data-st="${a.id}" value="${(a.stmt||{})[mk]?fmtN(a.stmt[mk]):''}" placeholder="Nhập số tiền"></label>
+        ${(a.stmt||{})[mk]?'<div class="dline muted" style="margin-top:-2px">Số sao kê đã gồm lãi/phí. Lãi/phí ghi bên dưới chỉ để theo dõi, không cộng thêm vào số phải trả.</div>':''}
         ${!a.dueDay?'<div class="dline muted">Đặt ngày đến hạn trả (nút ✏️) để app nhắc đúng hạn.</div>':''}
         ${it?dueLine(it)+(it.done&&v&&a.dueDay?`<div class="dline">📅 Kỳ sau phải trả <b>${fmt(v)}</b> · hạn ${String(a.dueDay).padStart(2,'0')}/${addMonths(mk,1).slice(5)}</div>`:''):v?`<div class="dline">${a.dueDay?'':'Chưa đặt ngày đến hạn trả · '}Dư nợ ${fmt(v)}</div>`:'<div class="dline ok">✓ Không còn dư nợ</div>'}
         <div class="dline">💸 Lãi/phí tháng này: <b class="${mi?'out':''}">${fmt(mi)}</b>${ai>mi?` · tổng đã trả ${fmtK(ai)}`:''}</div>
