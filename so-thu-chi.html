@@ -209,6 +209,8 @@ const BRANDS=[
  ['LAZLATER','LazPayLater (Lazada)','#0f146d','paylater','LAZ'],['FUNDIIN','Fundiin','#f05a28','paylater','Fun'],['KREDIVO','Kredivo','#ff6b00','paylater','Kre'],
  ['HOMEPL','Home PayLater','#e11b22','paylater','Home'],['ATOME','Atome','#1b1b1b','paylater','Atom'],['MUADEE','Muadee (HDBank)','#e0161d','paylater','Mua']];
 const isDebt=a=>!!a&&(a.type==='credit'||a.type==='paylater');
+/* Lãi/phí thẻ & trả sau chỉ để theo dõi: không cộng vào tổng chi, biểu đồ, dự báo (vẫn tính vào dư nợ thẻ để khớp sao kê) */
+const isSpend=t=>t.type==='expense'&&t.cat!=='Lãi & phí';
 const BRAND={};BRANDS.forEach(([c,n,col,t,s])=>BRAND[c]={c,n,col,t,s:s||c});
 const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/[^a-z0-9]/g,'');
 function guessBrand(name){const n=norm(name);if(!n)return null;let best=null;for(const b of Object.values(BRAND)){const bn=norm(b.n.replace(/\(.*\)/,''));if(bn.length>=3&&n.includes(bn)&&(!best||bn.length>norm(best.n).length))best=b}
@@ -463,7 +465,7 @@ const accOptions=(sel,ex)=>state.accounts.filter(a=>a.id!==ex).map(a=>`<option v
 function viewToday(){
   const D=ui.date,T=today();
   const txs=state.tx.filter(t=>t.date===D).sort((a,b)=>a.ts-b.ts);
-  const exp=sum(txs.filter(t=>t.type==='expense'));
+  const exp=sum(txs.filter(isSpend));
   const due=dueItems(D.slice(0,7)).filter(it=>!it.done&&(it.date===D||(D===T&&it.date<D)));
   ui.dueMap={};due.forEach(it=>ui.dueMap[it.key]=it);
   if(!accById(ui.acc))ui.acc=state.accounts[0]&&state.accounts[0].id;
@@ -525,7 +527,7 @@ function fixForm(type){
 }
 function chartHtml(){
   const cm=today().slice(0,7),sm=state.startDate.slice(0,7),data=[];
-  for(let j=5;j>=0;j--){const k=addMonths(cm,-j);if(k<sm)continue;const m=state.tx.filter(t=>t.date.startsWith(k));data.push({k,i:sum(m.filter(t=>t.type==='income')),e:sum(m.filter(t=>t.type==='expense'))})}
+  for(let j=5;j>=0;j--){const k=addMonths(cm,-j);if(k<sm)continue;const m=state.tx.filter(t=>t.date.startsWith(k));data.push({k,i:sum(m.filter(t=>t.type==='income')),e:sum(m.filter(isSpend))})}
   const max=Math.max(1,...data.map(d=>Math.max(d.i,d.e)));
   const h=v=>v?`max(3px,${v/max*100}%)`:'0';
   return `<div class="legend"><span><i style="background:var(--green)"></i>Thu</span><span><i style="background:var(--red)"></i>Chi</span><small class="muted">Chạm cột để xem tháng</small></div>
@@ -535,8 +537,8 @@ function chartHtml(){
 function viewMonth(){
   const mk=ui.month,T=today(),cur=mk===T.slice(0,7);
   const mt=state.tx.filter(t=>t.date.startsWith(mk));
-  const inc=sum(mt.filter(t=>t.type==='income')),exp=sum(mt.filter(t=>t.type==='expense'));
-  const by={};mt.filter(t=>t.type==='expense').forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
+  const inc=sum(mt.filter(t=>t.type==='income')),exp=sum(mt.filter(isSpend));
+  const by={};mt.filter(isSpend).forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
   const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]),max=rows.length?rows[0][1]:1;
   const items=dueItems(mk);ui.fixMap={};items.forEach(i=>ui.fixMap[i.key]=i);
   const outs=items.filter(i=>i.type!=='income'),ins=items.filter(i=>i.type==='income');
@@ -624,7 +626,7 @@ function forecast(days){
   const cash=state.accounts.filter(a=>!isDebt(a)).reduce((s,a)=>s+bal(a.id),0);
   const card=state.accounts.filter(a=>isDebt(a)).reduce((s,a)=>s+Math.max(0,-bal(a.id)),0);
   const from=state.startDate>addDays(T,-30)?state.startDate:addDays(T,-30),nd=Math.max(1,daysBetween(from,T));
-  const past=state.tx.filter(t=>!t.ref&&t.type==='expense'&&t.date>=from&&t.date<T);
+  const past=state.tx.filter(t=>!t.ref&&isSpend(t)&&t.date>=from&&t.date<T);
   const vExp=sum(past)/nd;
   const from2=state.startDate>addDays(T,-90)?state.startDate:addDays(T,-90),nd2=Math.max(1,daysBetween(from2,T));
   const vInc=sum(state.tx.filter(t=>!t.ref&&t.type==='income'&&t.date>=from2&&t.date<T))/nd2;
