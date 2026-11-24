@@ -108,6 +108,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .eform .msave{background:var(--mc);color:#fff}
 .tgroup{border-left:4px solid var(--line)}.g-expense{border-left-color:var(--red)}.g-income{border-left-color:var(--green)}.g-other{border-left-color:#3b82f6}
 .tgroup h3{margin:0}
+.cardel{margin-left:auto;color:var(--muted);font-size:13px;width:26px;height:26px}
+.yrIn{width:100%;text-align:right;padding:4px 6px;margin:0 0 2px;font-size:13px;background:var(--card)}
+.caradd{display:flex;gap:8px;margin-top:10px}.caradd input{flex:1}.caradd button{flex:none}
 .frow{border-top:1px solid var(--line);padding:9px 0}.frow:first-of-type{border-top:0}
 .fhead{display:flex;align-items:baseline;gap:6px;margin-bottom:6px}.fhead span{font-size:18px}.fhead small{margin-left:auto;font-size:11.5px}
 .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -117,6 +120,27 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .fst a{color:var(--accent);text-decoration:none;font-size:15px;padding:0 4px}
 .fcell input{width:100%;text-align:right;padding:5px 6px;margin:3px 0 2px;font-size:15px;background:var(--card)}
 .fcell small{font-size:11px;display:block;text-align:right}
+/* Màn Sửa thiết lập: mỗi mục một màu, mỗi khoản một thẻ */
+.s-acc{--sc:#3b82f6}.s-loan{--sc:#a855f7}.s-exp{--sc:var(--red)}.s-inc{--sc:var(--green)}
+.snav{display:flex;gap:6px;overflow-x:auto;margin-top:12px;padding-bottom:2px;scrollbar-width:none}
+.snav button{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-size:13px;background:var(--card)}
+.ssec{margin-top:20px;scroll-margin-top:12px}
+.shead{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;font-weight:800;font-size:15.5px;color:var(--sc);
+  background:color-mix(in srgb,var(--sc) 13%,var(--card));border:1px solid color-mix(in srgb,var(--sc) 40%,var(--line))}
+.shead small{margin-left:auto;font-weight:600;font-size:12px;color:var(--muted)}
+.ecard{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--sc);border-radius:14px;padding:12px;margin-top:10px}
+.ehead{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:2px}
+.enum{width:24px;height:24px;border-radius:50%;background:var(--sc);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+.ehead b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ehead small{color:var(--muted);font-size:12px;white-space:nowrap}
+.edel{color:var(--red);font-size:12px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;flex:none}
+.ecard .fl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-top:9px}
+.ecard .fl input,.ecard .fl select{margin-top:3px}
+.ecard .brandrow{margin:3px 0 0}
+.esub{font-size:11.5px;font-weight:800;color:var(--sc);text-transform:uppercase;letter-spacing:.04em;margin-top:12px;border-top:1px dashed var(--line);padding-top:8px}
+.addbtn{width:100%;margin-top:10px;border:1.5px dashed var(--sc);color:var(--sc);border-radius:12px;padding:10px;font-weight:700;background:transparent}
+.savebar{position:sticky;bottom:0;z-index:4;background:var(--bg);padding:10px 0 calc(10px + env(safe-area-inset-bottom));margin-top:16px;display:flex;gap:8px;border-top:1px solid var(--line)}
+.savebar>*{flex:1}
 .dbox{margin-top:7px;background:var(--bg);border-radius:10px;padding:7px 9px;font-size:12.5px}
 .stline{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;font-size:12.5px;color:var(--text)}
 .stline input{width:128px;flex:none;text-align:right;padding:6px 8px;font-size:15px;margin:0;background:var(--card)}
@@ -273,7 +297,7 @@ function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):nul
 /* Ghi nhận thay đổi để gộp dữ liệu giữa các máy:
    - giao dịch sửa: t.mt = lúc sửa; giao dịch xóa: state.deleted[id] = lúc xóa
    - tài khoản, khoản hằng tháng, mẫu ghi nhanh…: state.cfgAt = lúc sửa gần nhất */
-const CFG_KEYS=['setup','startDate','accounts','loans','recurring','quick','fuel','fuelDate','food','closed'];
+const CFG_KEYS=['setup','startDate','accounts','loans','recurring','quick','fuel','fuelDate','food','cars','closed'];
 const cfgOf=s=>JSON.stringify(CFG_KEYS.map(k=>s[k]===undefined?null:s[k]));
 const snap=s=>s&&s.tx?{cfg:cfgOf(s),tx:new Map(s.tx.map(t=>[t.id,JSON.stringify(t)]))}:null;
 let base=null;
@@ -761,6 +785,28 @@ const FUELS=[['ron95','Xăng E10 RON 95-III'],['ron92','Xăng E5 RON 92-II'],['d
 const FOODS=[['gao','Gạo','kg','🍚','gạo'],['heo','Thịt heo (ba rọi)','kg','🥓','ba rọi heo'],['bo','Thịt bò','kg','🥩','thịt bò'],['ga','Thịt gà','kg','🍗','thịt gà'],['ca','Cá','kg','🐟','cá'],['tom','Tôm','kg','🦐','tôm'],
   ['trung','Trứng gà','hộp 10 quả','🥚','trứng gà'],['rau','Rau xanh','kg','🥬','rau'],['traicay','Trái cây','kg','🍊','trái cây'],['dauan','Dầu ăn','chai 1 lít','🫒','dầu ăn'],['duong','Đường','kg','🧂','đường'],['sua','Sữa bột cho bé','hộp','🍼','sữa bột'],['mi','Mì gói','thùng','🍜','thùng mì']];
 const STORES=[['bhx','Bách Hóa Xanh','BHX',q=>'https://www.bachhoaxanh.com/tim-kiem?key='+encodeURIComponent(q)],['coop','Co.op Mart','Co.op',q=>'https://cooponline.vn/search?router=productListing&query='+encodeURIComponent(q)]];
+/* ---------- Giá ô tô mới & cũ (nhập tay, có nút mở trang tra giá) ---------- */
+const CAR_DEFAULTS=['Toyota Vios','Hyundai Accent','Honda City','Mitsubishi Xpander','Toyota Corolla Cross','Kia Seltos','Ford Ranger','VinFast VF 5'];
+const carSlug=n=>norm2(n).replace(/\s+/g,'-');
+const norm2=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/[^a-z0-9 ]/g,' ').trim();
+function carsOf(){return state.cars||CAR_DEFAULTS.map(n=>({id:carSlug(n),name:n}))}
+function priceCell(e,kind,id,label,url,extra){
+  const ch=e.p&&e.prev?Math.round((e.p-e.prev)/e.prev*100):null;
+  return `<div class="fcell"><div class="fst"><span>${label}</span><a href="${url}" target="_blank" rel="noopener" aria-label="Tra giá ${label}">↗</a></div>
+    <input class="money" inputmode="numeric" data-car="${id}" data-kind="${kind}" value="${e.p?fmtN(e.p):''}" placeholder="Giá (đồng)">${extra||''}
+    <small class="muted">${e.p?'≈ '+fmtBig(e.p)+' · ':''}${e.d?dm(e.d):'&nbsp;'}${ch?` <span class="${ch>0?'out':'in'}">${ch>0?'▲':'▼'}${Math.abs(ch)}%</span>`:''}</small></div>`;
+}
+function carsHtml(){
+  const cars=carsOf();
+  return `<div class="card"><h3>🚗 Giá ô tô mới & cũ</h3>
+    <p class="hint" style="margin:0 0 4px">Bấm <b>↗</b> để tra giá: xe <b>mới</b> mở bảng giá trên Google, xe <b>cũ</b> mở Bonbanh. Xem rồi nhập giá vào ô, app nhớ và so với lần trước.</p>
+    ${cars.map(c=>`<div class="frow"><div class="fhead"><span>🚗</span><b>${esc(c.name)}</b><button class="cardel" data-act="delCar" data-id="${c.id}" aria-label="Bỏ ${esc(c.name)}">✕</button></div>
+      <div class="fgrid">${priceCell(c.new||{},'new',c.id,'Mới','https://www.google.com/search?q='+encodeURIComponent('giá xe '+c.name+' mới nhất'))}
+      ${priceCell(c.used||{},'used',c.id,'Cũ'+(c.used&&c.used.yr?' · đời '+c.used.yr:''),'https://bonbanh.com/oto/'+carSlug(c.name),`<input class="yrIn" inputmode="numeric" data-caryr="${c.id}" value="${c.used&&c.used.yr||''}" placeholder="Đời xe (năm)" aria-label="Đời xe cũ">`)}</div></div>`).join('')}
+    <div class="caradd"><input id="carName" placeholder="Thêm mẫu xe, VD: Mazda CX-5" autocomplete="off"><button class="outline" data-act="addCar">＋ Thêm</button></div>
+    <p class="hint">▲ đỏ: tăng giá, ▼ xanh: giảm giá so với lần nhập trước. Giá xe mới nên ghi giá lăn bánh hoặc niêm yết, xe cũ ghi kèm đời xe để so cho đúng.</p></div>`;
+}
+function saveCars(fn){const cars=JSON.parse(JSON.stringify(carsOf()));fn(cars);state.cars=cars;persist();render()}
 /* Dữ liệu cũ (một giá chung) được coi là giá Bách Hóa Xanh */
 function foodOf(k){const f=(state.food||{})[k]||{};if(f.p&&!f.bhx)return {bhx:{p:f.p,prev:f.prev,d:f.d}};return f}
 const fmtTr=n=>(n/1e6).toLocaleString('vi-VN',{maximumFractionDigits:2})+' tr';
@@ -799,15 +845,7 @@ function viewMarket(){
   ${card('🥇 Giá vàng',gold,err.gold)}
   ${card('💵 Tỷ giá ngoại tệ',fx,err.fx,'Tỷ giá thị trường quốc tế, có thể chênh vài trăm đồng so với giá mua bán ở ngân hàng.')}
   ${card('₿ Tiền số',coins,err.coins,'▲▼ thay đổi trong 24 giờ.')}
-  <div class="card"><h3>⛽ Xăng dầu</h3>${fuel}<p class="hint">Giá xăng dầu chưa có nguồn tự cập nhật, bạn nhập theo bảng giá Petrolimex mỗi kỳ điều chỉnh (thường thứ Năm hằng tuần)${state.fuelDate?`. Lần nhập gần nhất: <b id="fuelDate">${dmy(state.fuelDate)}</b>`:''}. <a href="https://www.petrolimex.com.vn/" target="_blank" rel="noopener" style="color:var(--accent)">Xem giá Petrolimex ↗</a></p></div>
-  <div class="card"><h3>🛒 Thực phẩm: Bách Hóa Xanh & Co.op Mart</h3>
-    <p class="hint" style="margin:0 0 4px">Bấm <b>↗</b> để mở trang tìm kiếm của siêu thị, xem giá rồi nhập vào ô. Nơi nào rẻ hơn được tô xanh.</p>
-    ${FOODS.map(([k,l,u,ic,q])=>{const f=foodOf(k),pb=(f.bhx||{}).p,pc=(f.coop||{}).p,cheap=pb&&pc&&pb!==pc?(pb<pc?'bhx':'coop'):'';
-    return `<div class="frow"><div class="fhead"><span>${ic}</span><b>${l}</b><small class="muted">đồng / ${u}</small></div><div class="fgrid">${STORES.map(([s,sn,sh,url])=>{const e=f[s]||{},ch=e.p&&e.prev?Math.round((e.p-e.prev)/e.prev*100):null;
-      return `<div class="fcell ${cheap===s?'cheap':''}"><div class="fst"><span>${sh}</span><a href="${url(q)}" target="_blank" rel="noopener" aria-label="Tìm ${esc(l)} trên ${sn}">↗</a></div>
-        <input class="money" inputmode="numeric" data-food="${k}" data-store="${s}" value="${e.p?fmtN(e.p):''}" placeholder="Giá" aria-label="Giá ${esc(l)} ở ${sn}">
-        <small class="muted">${e.d?dm(e.d):'&nbsp;'}${ch?` <span class="${ch>0?'out':'in'}">${ch>0?'▲':'▼'}${Math.abs(ch)}%</span>`:''}${cheap===s?' · rẻ hơn':''}</small></div>`}).join('')}</div></div>`}).join('')}
-    <p class="hint">▲ đỏ: tăng giá, ▼ xanh: giảm giá so với lần nhập trước ở cùng siêu thị. Giá siêu thị chưa lấy tự động được vì trang của họ chỉ hiện giá trong ứng dụng riêng.</p></div>
+  ${carsHtml()}
   <p class="hint">Nguồn: vang.today, gold-api.com, open.er-api.com, CoinGecko. Chỉ để tham khảo.</p>`;
 }
 
@@ -826,39 +864,47 @@ function viewSetup(){
   const d=ui.draft,edit=state&&state.setup;
   const ao=sel=>d.accounts.map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.name||'(chưa đặt tên)')}</option>`).join('');
   const f=(sec,i,k,v,ph,mode)=>`<input data-sec="${sec}" data-i="${i}" data-f="${k}" value="${esc(v)}" ${ph?`placeholder="${ph}"`:''} ${mode==='money'?'class="money" inputmode="numeric"':mode==='num'?'inputmode="numeric"':mode==='dec'?'inputmode="decimal"':''}>`;
-  const x=(sec,i)=>`<button class="x" data-act="delRow" data-sec="${sec}" data-i="${i}" aria-label="Xóa">✕</button>`;
-  const rec=type=>d.recurring.map((r,i)=>[r,i]).filter(([r])=>r.type===type).map(([r,i])=>`<div class="row-edit">
-    <div class="grid2">${f('recurring',i,'name',r.name,'Tên')}${r.cur==='USD'?f('recurring',i,'usd',fmtDec(r.usd),'Số USD','dec'):f('recurring',i,'amount',r.amount?fmtN(r.amount):'','Số tiền','money')}</div>
-    <div class="grid2"><label>Loại tiền<select data-sec="recurring" data-i="${i}" data-f="cur"><option value="VND">VNĐ</option><option value="USD" ${r.cur==='USD'?'selected':''}>USD</option></select></label>
-      ${r.cur==='USD'?`<label>Phí ngoại tệ (%)${f('recurring',i,'fee',fmtDec(feeOf(r)),'VD: 2,5','dec')}</label>`:'<span></span>'}</div>
-    <div class="grid2"><label>Ngày${f('recurring',i,'day',r.day,'1-31','num')}</label><label>${type==='income'?'Nhận vào':'Trả từ'}<select data-sec="recurring" data-i="${i}" data-f="acc">${ao(r.acc)}</select></label></div>${x('recurring',i)}</div>`).join('');
-  return `<h1>${edit?'Sửa thiết lập':'Bắt đầu'}</h1><p class="muted" style="margin:0">${edit?'Sửa xong bấm Lưu ở cuối trang.':'Điền số dư hiện tại (xem trong MISA). Ô nào chưa rõ cứ để trống, sửa sau được.'}</p>
+  const L=(label,inner)=>`<label class="fl">${label}${inner}</label>`;
+  const head=(sec,i,n,title,sub)=>`<div class="ehead"><span class="enum">${n}</span><b>${esc(title)}</b>${sub?`<small>${sub}</small>`:''}<button class="edel" data-act="delRow" data-sec="${sec}" data-i="${i}" aria-label="Xóa ${esc(title)}">✕ Xóa</button></div>`;
+  const sel=(sec,i,k,opts,v)=>`<select data-sec="${sec}" data-i="${i}" data-f="${k}">${opts.map(([o,l])=>`<option value="${o}" ${o===v?'selected':''}>${l}</option>`).join('')}</select>`;
+  const section=(id,cls,icon,title,count,body,add,hint)=>`<section class="ssec ${cls}" id="${id}"><div class="shead">${icon} ${title}<small>${count} mục</small></div>${hint?`<p class="hint" style="margin:6px 2px 0">${hint}</p>`:''}${body}${add}</section>`;
+  const addBtn=(label,sec,type)=>`<button class="addbtn" data-act="addRow" data-sec="${sec}" ${type?`data-type="${type}"`:''}>＋ ${label}</button>`;
+  const recs=type=>d.recurring.map((r,i)=>[r,i]).filter(([r])=>r.type===type);
+  const rec=type=>recs(type).map(([r,i],n)=>`<div class="ecard">
+    ${head('recurring',i,n+1,r.name||(type==='income'?'Khoản thu mới':'Khoản chi mới'),r.cur==='USD'&&r.usd?fmtUsd(r.usd):r.amount?fmt(r.amount):'')}
+    <div class="grid2">${L('Tên khoản',f('recurring',i,'name',r.name,type==='income'?'VD: Lương':'VD: Thuê nhà'))}${r.cur==='USD'?L('Số tiền (USD)',f('recurring',i,'usd',fmtDec(r.usd),'VD: 20','dec')):L('Số tiền (VNĐ)',f('recurring',i,'amount',r.amount?fmtN(r.amount):'','0','money'))}</div>
+    <div class="grid2">${L('Loại tiền',sel('recurring',i,'cur',[['VND','VNĐ'],['USD','USD']],r.cur==='USD'?'USD':'VND'))}${r.cur==='USD'?L('Phí ngoại tệ (%)',f('recurring',i,'fee',fmtDec(feeOf(r)),'VD: 2,5','dec')):'<span></span>'}</div>
+    <div class="grid2">${L('Ngày trong tháng',f('recurring',i,'day',r.day,'1-31','num'))}${L(type==='income'?'Nhận vào tài khoản':'Trả từ tài khoản',`<select data-sec="recurring" data-i="${i}" data-f="acc">${ao(r.acc)}</select>`)}</div></div>`).join('');
+  const brandSel=(a,i)=>`<div class="brandrow"><div class="aic">${accIcon(a)}</div><select data-sec="accounts" data-i="${i}" data-f="brand" aria-label="Ngân hàng hoặc ví"><option value="">${a.type==='wallet'?'— Chọn ví điện tử —':a.type==='paylater'?'— Chọn dịch vụ trả sau —':'— Chọn ngân hàng —'}</option>
+      ${[['bank','Ngân hàng'],['wallet','Ví điện tử'],['paylater','Mua trước trả sau']].sort((p,q)=>(q[0]===(a.type==='credit'?'bank':a.type))-(p[0]===(a.type==='credit'?'bank':a.type))).map(([t,l])=>`<optgroup label="${l}">${BRANDS.filter(b=>b[3]===t).map(b=>`<option value="${b[0]}" ${a.brand===b[0]?'selected':''}>${esc(b[1])}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
+  const accs=d.accounts.map((a,i)=>`<div class="ecard">
+    ${head('accounts',i,i+1,a.name||'Tài khoản mới',ACC_TYPES[a.type])}
+    ${L('Loại tài khoản',sel('accounts',i,'type',Object.entries(ACC_TYPES),a.type))}
+    ${a.type!=='cash'?`<div class="fl">${a.type==='wallet'?'Ví điện tử':a.type==='paylater'?'Dịch vụ trả sau':'Ngân hàng'}</div>${brandSel(a,i)}`:''}
+    <div class="grid2">${L('Tên hiển thị',f('accounts',i,'name',a.name,'VD: Vietcombank'))}${L(isDebt(a)?'Dư nợ hiện tại':'Số dư hiện tại',f('accounts',i,'opening',a.opening?fmtN(a.opening):'','0','money'))}</div>
+    ${isDebt(a)?`<div class="esub">${a.type==='credit'?'Thông tin thẻ tín dụng':'Thông tin trả sau'}</div>
+      <div class="grid2">${L('Hạn mức',f('accounts',i,'limit',a.limit?fmtN(a.limit):'','VD: 30.000.000','money'))}${L('Ngày đến hạn trả',f('accounts',i,'dueDay',a.dueDay||'','1-31','num'))}</div>
+      <div class="grid2">${L('Lãi/phí (%/tháng)',f('accounts',i,'rate',a.rate?String(a.rate).replace('.',','):'','VD: 2,5','dec'))}${L('Trả nợ từ',`<select data-sec="accounts" data-i="${i}" data-f="payFrom">${ao(a.payFrom)}</select>`)}</div>`:''}</div>`).join('');
+  const loans=d.loans.map((l,i)=>`<div class="ecard">
+    ${head('loans',i,i+1,l.name||'Khoản trả góp mới',l.remaining?`còn ${l.remaining} kỳ`:'')}
+    <div class="grid2">${L('Tên khoản',f('loans',i,'name',l.name,'VD: Điện thoại'))}${L('Tiền mỗi kỳ',f('loans',i,'amount',l.amount?fmtN(l.amount):'','0','money'))}</div>
+    <div class="grid2">${L('Còn bao nhiêu kỳ',f('loans',i,'remaining',l.remaining||'','VD: 7','num'))}${L('Ngày trả hằng tháng',f('loans',i,'day',l.day,'1-31','num'))}</div>
+    <div class="grid2">${L('Trong đó tiền lãi/kỳ',f('loans',i,'interest',l.interest?fmtN(l.interest):'','Không bắt buộc','money'))}${L('Trả từ tài khoản',`<select data-sec="loans" data-i="${i}" data-f="acc">${ao(l.acc)}</select>`)}</div></div>`).join('');
+  const nExp=recs('expense').length,nInc=recs('income').length;
+  return `<h1>${edit?'Sửa thiết lập':'Bắt đầu'}</h1><p class="muted" style="margin:0">${edit?'Sửa từng mục bên dưới rồi bấm Lưu.':'Điền số dư hiện tại (xem trong MISA). Ô nào chưa rõ cứ để trống, sửa sau được.'}</p>
   ${!edit?`<button class="ghost" data-act="showSync">☁️ Đã dùng trên máy khác? Lấy dữ liệu về</button>${ui.showSync?syncHtml():''}
   <button class="ghost" data-act="sample">Chỉ xem thử? Dùng dữ liệu mẫu</button>`:''}
-  <div class="sect">TÀI KHOẢN & SỐ DƯ</div><section class="card">
-  ${d.accounts.map((a,i)=>`<div class="row-edit">
-    ${a.type!=='cash'?`<div class="brandrow"><div class="aic">${accIcon(a)}</div><select data-sec="accounts" data-i="${i}" data-f="brand"><option value="">${a.type==='wallet'?'— Chọn ví điện tử —':a.type==='paylater'?'— Chọn dịch vụ trả sau —':'— Chọn ngân hàng —'}</option>
-      ${[['bank','Ngân hàng'],['wallet','Ví điện tử'],['paylater','Mua trước trả sau']].sort((p,q)=>(q[0]===(a.type==='credit'?'bank':a.type))-(p[0]===(a.type==='credit'?'bank':a.type))).map(([t,l])=>`<optgroup label="${l}">${BRANDS.filter(b=>b[3]===t).map(b=>`<option value="${b[0]}" ${a.brand===b[0]?'selected':''}>${esc(b[1])}</option>`).join('')}</optgroup>`).join('')}</select></div>`:''}
-    <div class="grid2">${f('accounts',i,'name',a.name,'Tên')}${f('accounts',i,'opening',a.opening?fmtN(a.opening):'',isDebt(a)?'Dư nợ':'Số dư','money')}</div>
-    <label>Loại<select data-sec="accounts" data-i="${i}" data-f="type">${Object.entries(ACC_TYPES).map(([k,v])=>`<option value="${k}" ${k===a.type?'selected':''}>${v}</option>`).join('')}</select></label>
-    ${isDebt(a)?`<div class="grid2"><label>Hạn mức${f('accounts',i,'limit',a.limit?fmtN(a.limit):'','VD: 30.000.000','money')}</label><label>Ngày đến hạn trả${f('accounts',i,'dueDay',a.dueDay||'','1-31','num')}</label></div>
-      <div class="grid2"><label>Lãi/phí (%/tháng)${f('accounts',i,'rate',a.rate?String(a.rate).replace('.',','):'','VD: 2,5','dec')}</label><label>Trả nợ từ<select data-sec="accounts" data-i="${i}" data-f="payFrom">${ao(a.payFrom)}</select></label></div>`:''}
-    ${x('accounts',i)}</div>`).join('')}
-  <button class="ghost" data-act="addRow" data-sec="accounts">＋ Thêm tài khoản</button></section>
-  <div class="sect">TRẢ GÓP</div><section class="card">
-  ${d.loans.map((l,i)=>`<div class="row-edit"><div class="grid2">${f('loans',i,'name',l.name,'Tên')}${f('loans',i,'amount',l.amount?fmtN(l.amount):'','Tiền mỗi kỳ','money')}</div>
-    <div class="grid2"><label>Còn bao nhiêu kỳ${f('loans',i,'remaining',l.remaining||'','VD: 7','num')}</label><label>Ngày trả${f('loans',i,'day',l.day,'1-31','num')}</label></div>
-    <div class="grid2"><label>Trong đó tiền lãi/kỳ${f('loans',i,'interest',l.interest?fmtN(l.interest):'','Không bắt buộc','money')}</label><label>Trả từ<select data-sec="loans" data-i="${i}" data-f="acc">${ao(l.acc)}</select></label></div>${x('loans',i)}</div>`).join('')}
-  <button class="ghost" data-act="addRow" data-sec="loans">＋ Thêm khoản trả góp</button></section>
-  <div class="sect">CHI CỐ ĐỊNH HẰNG THÁNG</div><section class="card">${rec('expense')}<button class="ghost" data-act="addRow" data-sec="recurring" data-type="expense">＋ Thêm khoản chi</button></section>
-  <div class="sect">THU NHẬP HẰNG THÁNG</div><section class="card">${rec('income')}<button class="ghost" data-act="addRow" data-sec="recurring" data-type="income">＋ Thêm khoản thu</button></section>
-  <p class="hint">Khoản nào để trống số tiền sẽ được bỏ qua. Job làm thêm thì ghi theo từng lần nhận.</p>
-  <div class="btnrow" style="margin-top:12px">${edit?`<button class="outline" data-act="cancelSetup" style="flex:0 0 90px">Hủy</button>`:''}<button class="primary" data-act="finish">${edit?'Lưu':'Bắt đầu ghi sổ'}</button></div>`;
+  <div class="snav"><button data-act="jump" data-id="s-acc">💳 Tài khoản (${d.accounts.length})</button><button data-act="jump" data-id="s-loan">📆 Trả góp (${d.loans.length})</button><button data-act="jump" data-id="s-exp">💸 Chi cố định (${nExp})</button><button data-act="jump" data-id="s-inc">💰 Thu nhập (${nInc})</button></div>
+  ${section('s-acc','s-acc','💳','Tài khoản & số dư',d.accounts.length,accs,addBtn('Thêm tài khoản','accounts'))}
+  ${section('s-loan','s-loan','📆','Trả góp',d.loans.length,loans,addBtn('Thêm khoản trả góp','loans'))}
+  ${section('s-exp','s-exp','💸','Chi cố định hằng tháng',nExp,rec('expense'),addBtn('Thêm khoản chi','recurring','expense'),'Khoản nào để trống số tiền sẽ được bỏ qua.')}
+  ${section('s-inc','s-inc','💰','Thu nhập hằng tháng',nInc,rec('income'),addBtn('Thêm khoản thu','recurring','income'),'Job làm thêm không đều thì ghi theo từng lần nhận ở tab Ghi sổ.')}
+  <div class="savebar">${edit?`<button class="outline" data-act="cancelSetup" style="flex:0 0 90px">Hủy</button>`:''}<button class="primary" data-act="finish">${edit?'💾 Lưu thay đổi':'Bắt đầu ghi sổ'}</button></div>`;
 }
 const CAT_GUESS=n=>/google|apple|icloud|a\.?i|chatgpt|claude|youtube|netflix|spotify/i.test(n)?'Đăng ký số':/nhà/i.test(n)?'Thuê nhà':/vợ/i.test(n)?'Vợ':/con|học|sữa/i.test(n)?'Con cái':/điện|nước|net|wifi|gas/i.test(n)?'Điện nước':/mua|shopee|lazada|tiki|siêu thị/i.test(n)?'Mua sắm':/ăn|chợ/i.test(n)?'Ăn uống':'Khác';
 function finish(){
   const d=ui.draft;
-  const accounts=d.accounts.filter(a=>a.name.trim()).map(a=>({id:a.id,name:a.name.trim(),type:a.type,brand:a.brand||'',opening:isDebt(a)?-(a.opening||0):(a.opening||0),limit:isDebt(a)?(a.limit||0):0,rate:isDebt(a)?(+a.rate||0):0,dueDay:a.dueDay||0,payFrom:a.payFrom}));
+  const accounts=d.accounts.filter(a=>a.name.trim()).map(a=>({id:a.id,name:a.name.trim(),type:a.type,brand:a.brand||'',opening:isDebt(a)?-(a.opening||0):(a.opening||0),limit:isDebt(a)?(a.limit||0):0,rate:isDebt(a)?(+a.rate||0):0,stmt:isDebt(a)&&a.stmt?a.stmt:undefined,dueDay:a.dueDay||0,payFrom:a.payFrom}));
   if(!accounts.length){toast('Cần ít nhất 1 tài khoản');return false}
   const ids=new Set(accounts.map(a=>a.id)),first=(accounts.find(a=>!isDebt(a))||accounts[0]).id,fix=id=>ids.has(id)?id:first;
   accounts.forEach(a=>{if(isDebt(a))a.payFrom=a.payFrom!==a.id&&ids.has(a.payFrom)?a.payFrom:first});
@@ -922,6 +968,9 @@ const ACT={
   cat(el){ui.cat=el.dataset.v;ui.more=false;render()},
   more(){ui.more=!ui.more;render()},
   mktReload(){loadMarket(true)},
+  addCar(){const n=$('#carName').value.trim();if(!n){toast('Nhập tên mẫu xe');return}
+    saveCars(cs=>{if(!cs.some(c=>norm2(c.name)===norm2(n)))cs.push({id:carSlug(n)+'-'+uid().slice(0,4),name:n})});toast('Đã thêm '+n)},
+  delCar(el){const c=carsOf().find(x=>x.id===el.dataset.id);if(!c||!confirm('Bỏ theo dõi giá xe "'+c.name+'"?'))return;saveCars(cs=>{const i=cs.findIndex(x=>x.id===c.id);if(i>=0)cs.splice(i,1)})},
   payDebt(el){const key=el.dataset.key,T=today(),it=dueItems(T.slice(0,7)).find(i=>i.key===key&&!i.done);
     let acc,toAcc,name,amount,type='transfer',cat=null;
     if(it){acc=it.acc;toAcc=it.toAcc;name=it.name;amount=it.amount;type=it.type;cat=it.cat}
@@ -994,6 +1043,7 @@ const ACT={
   import(){$('#imp').click()},
   reset(){if(!confirm(sync?'Xóa toàn bộ dữ liệu TRÊN MÁY NÀY và ngắt đồng bộ? Dữ liệu trên GitHub vẫn còn, lấy lại được bằng "Lấy dữ liệu về".':'Xóa TOÀN BỘ dữ liệu? Không thể hoàn tác.'))return;
     try{localStorage.removeItem(KEY)}catch(e){}sync=null;saveSync();state=null;base=null;ui.draft=null;ui.view='setup';render();scrollTo(0,0)},
+  jump(el){const s=document.getElementById(el.dataset.id);if(s)s.scrollIntoView({behavior:'smooth',block:'start'})},
   showSync(){ui.showSync=!ui.showSync;render()},
   async connectSync(){const token=$('#syTok').value.trim(),pass=$('#syPass').value;
     if(!token||pass.length<6){toast('Nhập mã truy cập và mật khẩu (tối thiểu 6 ký tự)');return}
@@ -1010,6 +1060,9 @@ document.addEventListener('change',e=>{
   if(el.id==='toSel'){ui.toAcc=el.value;return}
   if(el.dataset.st){const a=accById(el.dataset.st);if(!a)return;const mk=today().slice(0,7),v=parseAmt(el.value);a.stmt=Object.assign({},a.stmt);
     if(v)a.stmt[mk]=v;else delete a.stmt[mk];persist();render();toast(v?'Đã lưu số phải thanh toán tháng này':'Đã xóa số sao kê');return}
+  if(el.dataset.car){const id=el.dataset.car,kind=el.dataset.kind,v=parseAmt(el.value);
+    saveCars(cs=>{const c=cs.find(x=>x.id===id);if(!c)return;const o=c[kind]||{};c[kind]=v?Object.assign({},o,{p:v,prev:o.p&&o.p!==v?o.p:o.prev||0,d:today()}):(o.yr?{yr:o.yr}:undefined)});toast(v?'Đã lưu giá xe':'Đã xóa giá');return}
+  if(el.dataset.caryr){const id=el.dataset.caryr,y=parseInt(el.value)||0;saveCars(cs=>{const c=cs.find(x=>x.id===id);if(!c)return;c.used=Object.assign({},c.used,{yr:y>1980&&y<2100?y:undefined})});return}
   if(el.dataset.food){state.food=state.food||{};const k=el.dataset.food,s=el.dataset.store||'bhx',f=foodOf(k),o=f[s]||{},v=parseAmt(el.value);
     const n={bhx:f.bhx,coop:f.coop};n[s]=v?{p:v,prev:o.p&&o.p!==v?o.p:o.prev||0,d:today()}:undefined;state.food[k]=JSON.parse(JSON.stringify(n));
     persist();render();toast(v?'Đã lưu giá':'Đã xóa giá');return}
@@ -1029,7 +1082,8 @@ document.addEventListener('change',e=>{
     if(!row.name.trim()||/^(thẻ ngân hàng|ví điện tử|thẻ tín dụng|trả sau)\s*\d*$/i.test(row.name.trim())||old)row.name=row.type==='credit'?'Thẻ tín dụng '+b.n:b.n;
     render()}
   if(k==='type'||k==='cur')render();
-  if(k==='name'&&el.dataset.sec==='accounts'&&!row.brand){const ic=el.closest('.row-edit').querySelector('.aic');if(ic)ic.innerHTML=accIcon(row)}
+  if(k==='name'&&el.dataset.sec==='accounts'&&!row.brand){const c=el.closest('.ecard'),ic=c&&c.querySelector('.aic'),hb=c&&c.querySelector('.ehead b');if(ic)ic.innerHTML=accIcon(row);if(hb)hb.textContent=row.name||'Tài khoản mới'}
+  else if(k==='name'&&el.closest('.ecard')){const hb=el.closest('.ecard').querySelector('.ehead b');if(hb)hb.textContent=el.value||'Khoản mới'}
   if(k==='name'&&el.dataset.sec==='accounts')document.querySelectorAll(`option[value="${row.id}"]`).forEach(o=>o.textContent=row.name||'(chưa đặt tên)');
 });
 function fcHover(e){const svg=e.target.closest&&e.target.closest('.fc svg');if(!svg||!ui.fc)return;const r=svg.getBoundingClientRect(),{pts,x,y,W}=ui.fc,k=W/r.width;

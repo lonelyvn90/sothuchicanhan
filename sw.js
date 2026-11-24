@@ -1,6 +1,6 @@
 /* Sổ Thu Chi: cho app mở được khi không có mạng.
    Ưu tiên tải bản mới từ mạng; mất mạng thì dùng bản đã lưu. Giá thị trường (trang khác) không lưu ở đây. */
-const CACHE = 'sothuchi-v11';
+const CACHE = 'sothuchi-v12';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
