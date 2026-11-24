@@ -136,6 +136,18 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .edel{color:var(--red);font-size:12px;border:1px solid var(--line);border-radius:8px;width:30px;height:30px;flex:none}
 /* Ô icon trong tab Tài khoản rộng bằng nhau để thanh số tiền thẳng hàng */
 .arow .aic{width:62px;height:38px;flex:none}.arow .aic .logo{width:38px;height:38px}
+.xmgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.xmc{border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:2px;min-width:0;background:var(--card)}
+.xmc.open{grid-column:1/-1}
+.xmimg{display:block;background:#fff;border-radius:9px;aspect-ratio:4/3;overflow:hidden;margin-bottom:4px}
+.xmimg img{width:100%;height:100%;object-fit:contain;display:block}
+.xmc.open .xmimg{aspect-ratio:16/9}
+.xmn{font-size:14px;line-height:1.25}.xmc small{font-size:11.5px}
+.xmp{font-weight:800;color:var(--accent);font-size:15px}.xmp small{font-weight:600;color:var(--muted)}
+.xmv{align-self:flex-start;font-size:12px;color:var(--accent);padding:3px 0;font-weight:600}
+.xmvars{border-top:1px solid var(--line);margin-top:4px}
+.xmvar{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.xmvar span{display:flex;flex-direction:column;min-width:0}.xmvar small{color:var(--muted)}.xmvar>b{white-space:nowrap}
 .bbsum{font-size:13px;color:var(--muted);margin:2px 0 8px}
 .bbset{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg);margin-bottom:8px}
 .bbset .fl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-top:8px}.bbset .fl input,.bbset .fl select{margin-top:3px}
@@ -905,6 +917,29 @@ function bonbanhHtml(){
     <p class="hint">Bonbanh không cho app tự đọc tin đăng, nên mỗi nút mở thẳng danh sách tin trên Bonbanh với đúng bộ lọc trên.</p></div>`;
 }
 function carsHtml(){return bonbanhHtml()}
+/* ---------- Bảng giá xe máy mới Honda & Yamaha (file xemay.json lấy từ trang chính thức, ảnh hiện trực tiếp từ trang hãng) ---------- */
+let xm=null,xmLoading=false;
+function loadXemay(){if(xm||xmLoading)return;xmLoading=true;
+  fetch('xemay.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(j=>{xm=j||{err:1}}).catch(()=>{xm={err:1}}).finally(()=>{xmLoading=false;if(ui.view==='market')render()})}
+function xemayHtml(){
+  if(!xm){loadXemay();return `<div class="card"><h3>🏍️ Bảng giá xe máy mới</h3><div class="empty">Đang tải…</div></div>`}
+  if(xm.err)return `<div class="card"><h3>🏍️ Bảng giá xe máy mới</h3><div class="empty">Chưa tải được bảng giá.</div></div>`;
+  const br=ui.xmBrand||'honda',src=xm[br]||{items:[]},cats=[...new Set(src.items.map(i=>i.cat).filter(Boolean))],cat=cats.includes(ui.xmCat)?ui.xmCat:'';
+  const items=src.items.filter(i=>!cat||i.cat===cat).slice().sort((a,b)=>ui.xmSort==='desc'?b.price-a.price:ui.xmSort==='asc'?a.price-b.price:0);
+  const card=(it,i)=>{const open=ui.xmOpen===br+i,vs=it.variants||[];
+    return `<div class="xmc ${open?'open':''}">
+      <a class="xmimg" ${it.link?`href="${esc(it.link)}" target="_blank" rel="noopener"`:''}><img loading="lazy" src="${esc(it.img)}" alt="${esc(it.name)}" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'"></a>
+      <b class="xmn">${esc(it.name)}</b><small class="muted">${esc(it.cat||'')}</small>
+      <div class="xmp">${vs.length>1?'<small>từ</small> ':''}${fmt(it.price)}</div>
+      ${vs.length?`<button class="xmv" data-act="xmOpen" data-k="${br+i}">${open?'Thu gọn ▴':vs.length>1?vs.length+' phiên bản ▾':'Màu & phiên bản ▾'}</button>`:''}
+      ${open?`<div class="xmvars">${vs.map(v=>`<div class="xmvar"><span><b>${esc(v.name)}</b><small>${esc(v.colors)}</small></span><b>${fmt(v.price)}</b></div>`).join('')}</div>`:''}</div>`};
+  return `<div class="card xmcard"><h3>🏍️ Bảng giá xe máy mới</h3>
+    <div class="seg" style="margin:6px 0 8px"><button class="${br==='honda'?'on':''}" data-act="xmBrand" data-v="honda">Honda (${(xm.honda||{items:[]}).items.length})</button><button class="${br==='yamaha'?'on':''}" data-act="xmBrand" data-v="yamaha">Yamaha (${(xm.yamaha||{items:[]}).items.length})</button></div>
+    <div class="bbbrands"><button class="chip ${!cat?'on':''}" data-act="xmCat" data-v="">Tất cả</button>${cats.map(c=>`<button class="chip ${cat===c?'on':''}" data-act="xmCat" data-v="${esc(c)}">${esc(c)}</button>`).join('')}
+      <button class="chip" data-act="xmSort">↕ ${ui.xmSort==='desc'?'Giá cao → thấp':ui.xmSort==='asc'?'Giá thấp → cao':'Theo hãng'}</button></div>
+    <div class="xmgrid">${items.map((it)=>card(it,src.items.indexOf(it))).join('')||'<div class="empty">Không có mẫu nào.</div>'}</div>
+    <p class="hint">Giá bán lẻ đề xuất của hãng (chưa gồm phí trước bạ, biển số), cập nhật ${xm.updated?dmy(xm.updated):''}. Nguồn: <a href="${esc((xm[br]||{}).url||'#')}" target="_blank" rel="noopener" style="color:var(--accent)">${br==='honda'?'honda.com.vn':'yamaha-motor.com.vn'} ↗</a>${br==='yamaha'?'. Yamaha chỉ công bố giá khởi điểm từng mẫu.':''}</p></div>`;
+}
 function saveCars(fn){const cars=JSON.parse(JSON.stringify(carsOf()));fn(cars);state.cars=cars;persist();render()}
 /* Dữ liệu cũ (một giá chung) được coi là giá Bách Hóa Xanh */
 function foodOf(k){const f=(state.food||{})[k]||{};if(f.p&&!f.bhx)return {bhx:{p:f.p,prev:f.prev,d:f.d}};return f}
@@ -945,6 +980,7 @@ function viewMarket(){
   ${card('💵 Tỷ giá ngoại tệ',fx,err.fx,'Tỷ giá thị trường quốc tế, có thể chênh vài trăm đồng so với giá mua bán ở ngân hàng.')}
   ${card('₿ Tiền số',coins,err.coins,'▲▼ thay đổi trong 24 giờ.')}
   ${carsHtml()}
+  ${xemayHtml()}
   <p class="hint">Nguồn: vang.today, gold-api.com, open.er-api.com, CoinGecko. Chỉ để tham khảo.</p>`;
 }
 
@@ -1093,6 +1129,10 @@ const ACT={
     state.pdebts=pdebtsOf().filter(x=>x.id!==p.id);state.tx=state.tx.filter(t=>t.pid!==p.id);persist();render()},
   monNow(el,e){e.preventDefault();ui.month=today().slice(0,7);ui.fix=null;render()},
   bbEdit(){ui.bbEdit=!ui.bbEdit;render()},
+  xmBrand(el){ui.xmBrand=el.dataset.v;ui.xmCat='';ui.xmOpen=null;render()},
+  xmCat(el){ui.xmCat=el.dataset.v;ui.xmOpen=null;render()},
+  xmSort(){const o=['','desc','asc'];ui.xmSort=o[(o.indexOf(ui.xmSort||'')+1)%3];render()},
+  xmOpen(el){ui.xmOpen=ui.xmOpen===el.dataset.k?null:el.dataset.k;render()},
   bbBrand(el){const s=bbOf(),k=el.dataset.k;s.brands=s.brands.includes(k)?s.brands.filter(x=>x!==k):s.brands.concat([k]);state.carSearch=s;persist();render()},
   addCar(){const n=$('#carName').value.trim();if(!n){toast('Nhập tên mẫu xe');return}
     saveCars(cs=>{if(!cs.some(c=>norm2(c.name)===norm2(n)))cs.push({id:carSlug(n)+'-'+uid().slice(0,4),name:n})});toast('Đã thêm '+n)},
